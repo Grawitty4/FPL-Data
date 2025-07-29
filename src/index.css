@@ -1,0 +1,164 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f5f5f5;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+.container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+h1 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 30px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+thead {
+  background-color: #2c3e50;
+  color: white;
+}
+
+th {
+  padding: 12px 8px;
+  text-align: center;
+  font-weight: 600;
+  border-bottom: 2px solid #34495e;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  transition: background-color 0.2s ease;
+}
+
+/* Sortable header styles */
+th[style*="cursor: pointer"] {
+  cursor: pointer;
+  user-select: none;
+}
+
+th[style*="cursor: pointer"]:hover {
+  background-color: #34495e;
+}
+
+th[style*="cursor: pointer"]:active {
+  background-color: #2c3e50;
+}
+
+td {
+  padding: 10px 8px;
+  text-align: center;
+  border-bottom: 1px solid #ecf0f1;
+  white-space: nowrap;
+}
+
+tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+tbody tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+
+tbody tr:nth-child(even):hover {
+  background-color: #e9ecef;
+}
+
+/* Responsive table wrapper */
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Column-specific styling */
+th:nth-child(1), td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  background: inherit;
+  z-index: 5;
+  min-width: 120px;
+  text-align: left;
+  font-weight: 600;
+}
+
+th:nth-child(2), td:nth-child(2),
+th:nth-child(3), td:nth-child(3) {
+  position: sticky;
+  left: 120px;
+  background: inherit;
+  z-index: 5;
+  min-width: 60px;
+}
+
+th:nth-child(4), td:nth-child(4),
+th:nth-child(5), td:nth-child(5) {
+  position: sticky;
+  left: 180px;
+  background: inherit;
+  z-index: 5;
+  min-width: 80px;
+}
+
+/* Highlight important stats */
+td:nth-child(5) { /* Points */
+  font-weight: bold;
+  color: #27ae60;
+}
+
+td:nth-child(6) { /* Form */
+  font-weight: bold;
+  color: #e74c3c;
+}
+
+td:nth-child(7) { /* Points per game */
+  font-weight: bold;
+  color: #3498db;
+}
+
+/* Loading and error states */
+.loading, .error {
+  text-align: center;
+  padding: 40px;
+  font-size: 18px;
+}
+
+.error {
+  color: #e74c3c;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .container {
+    padding: 10px;
+  }
+  
+  table {
+    font-size: 10px;
+  }
+  
+  th, td {
+    padding: 8px 4px;
+  }
+} 
