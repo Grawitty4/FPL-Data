@@ -18,7 +18,14 @@ const pool = new Pool({
 });
 
 // Enable CORS for React app
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://your-netlify-site.netlify.app', // Replace with your actual Netlify domain
+    process.env.FRONTEND_URL // Allow environment variable override
+  ].filter(Boolean),
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 

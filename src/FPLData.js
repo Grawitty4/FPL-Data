@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { buildApiUrl } from './config';
 
 function FPLData() {
   const [players, setPlayers] = useState([]);
@@ -10,7 +11,7 @@ function FPLData() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
   useEffect(() => {
-    axios.get('http://localhost:3001/api/fpl-data')
+    axios.get(buildApiUrl('/api/fpl-data'))
       .then(res => {
         setPlayers(res.data.elements);
         
