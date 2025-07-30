@@ -10,6 +10,7 @@ import {
   Legend,
 } from 'chart.js';
 import { Scatter } from 'react-chartjs-2';
+import annotationPlugin from 'chartjs-plugin-annotation';
 
 ChartJS.register(
   CategoryScale,
@@ -18,7 +19,8 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  annotationPlugin
 );
 
 function Analysis({ players, teams, positions }) {
@@ -96,6 +98,12 @@ function Analysis({ players, teams, positions }) {
     id: parseInt(id),
     name: name
   }));
+  
+  // Calculate median values for quadrant lines
+  const medianPrice = displayPlayers.length > 0 ? 
+    displayPlayers.sort((a, b) => a.price - b.price)[Math.floor(displayPlayers.length / 2)].price : 0;
+  const medianPoints = displayPlayers.length > 0 ? 
+    displayPlayers.sort((a, b) => a.points - b.points)[Math.floor(displayPlayers.length / 2)].points : 0;
 
   // Prepare data for ROI scatter plot
   const chartData = {
@@ -167,6 +175,73 @@ function Analysis({ players, teams, positions }) {
       },
       legend: {
         display: false
+      },
+      annotation: {
+        annotations: {
+          // Vertical line for median price
+          verticalLine: {
+            type: 'line',
+            xMin: medianPrice,
+            xMax: medianPrice,
+            borderColor: 'rgba(0, 0, 0, 0.3)',
+            borderWidth: 1,
+            borderDash: [5, 5]
+          },
+          // Horizontal line for median points
+          horizontalLine: {
+            type: 'line',
+            yMin: medianPoints,
+            yMax: medianPoints,
+            borderColor: 'rgba(0, 0, 0, 0.3)',
+            borderWidth: 1,
+            borderDash: [5, 5]
+          },
+          // Quadrant labels
+          q1Label: {
+            type: 'label',
+            xValue: medianPrice + (medianPrice * 0.25),
+            yValue: medianPoints + (medianPoints * 0.25),
+            content: ['High Price', 'High Points'],
+            font: {
+              size: 12,
+              weight: 'bold'
+            },
+            color: 'rgba(0, 0, 0, 0.7)'
+          },
+          q2Label: {
+            type: 'label',
+            xValue: medianPrice - (medianPrice * 0.25),
+            yValue: medianPoints + (medianPoints * 0.25),
+            content: ['Low Price', 'High Points'],
+            font: {
+              size: 12,
+              weight: 'bold'
+            },
+            color: 'rgba(0, 0, 0, 0.7)'
+          },
+          q3Label: {
+            type: 'label',
+            xValue: medianPrice - (medianPrice * 0.25),
+            yValue: medianPoints - (medianPoints * 0.25),
+            content: ['Low Price', 'Low Points'],
+            font: {
+              size: 12,
+              weight: 'bold'
+            },
+            color: 'rgba(0, 0, 0, 0.7)'
+          },
+          q4Label: {
+            type: 'label',
+            xValue: medianPrice + (medianPrice * 0.25),
+            yValue: medianPoints - (medianPoints * 0.25),
+            content: ['High Price', 'Low Points'],
+            font: {
+              size: 12,
+              weight: 'bold'
+            },
+            color: 'rgba(0, 0, 0, 0.7)'
+          }
+        }
       }
     },
     scales: {
@@ -182,6 +257,9 @@ function Analysis({ players, teams, positions }) {
           callback: function(value) {
             return '£' + value + 'm';
           }
+        },
+        grid: {
+          display: false
         }
       },
       y: {
@@ -191,6 +269,9 @@ function Analysis({ players, teams, positions }) {
           font: {
             weight: 'bold'
           }
+        },
+        grid: {
+          display: false
         }
       }
     }
