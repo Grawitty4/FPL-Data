@@ -3,7 +3,9 @@ import axios from 'axios';
 import { buildApiUrl } from './config';
 
 function FPLData() {
-  const [players, setPlayers] = useState([]);
+  const [activeTab, setActiveTab] = useState('summary');
+  const [summaryPlayers, setSummaryPlayers] = useState([]);
+  const [detailsPlayers, setDetailsPlayers] = useState([]);
   const [teams, setTeams] = useState({});
   const [positions, setPositions] = useState({});
   const [gameweeks, setGameweeks] = useState([]);
@@ -19,13 +21,17 @@ function FPLData() {
         const gameweeksResponse = await axios.get(buildApiUrl('/api/gameweeks'));
         setGameweeks(gameweeksResponse.data);
         
-        // Fetch players data
-        const playersResponse = await axios.get(buildApiUrl('/api/stored-fpl-data'));
-        setPlayers(playersResponse.data);
+        // Fetch summary data
+        const summaryResponse = await axios.get(buildApiUrl('/api/stored-fpl-data'));
+        setSummaryPlayers(summaryResponse.data);
         
-        // Create team mapping
+        // Fetch details data (all gameweeks)
+        const detailsResponse = await axios.get(buildApiUrl('/api/gameweek-fpl-data'));
+        setDetailsPlayers(detailsResponse.data);
+        
+        // Create team mapping from summary data
         const teamMapping = {};
-        playersResponse.data.forEach(player => {
+        summaryResponse.data.forEach(player => {
           if (player.team_code && player.team_name) {
             teamMapping[player.team_code] = {
               name: player.team_name,
@@ -35,9 +41,9 @@ function FPLData() {
         });
         setTeams(teamMapping);
         
-        // Create position mapping
+        // Create position mapping from summary data
         const positionMapping = {};
-        playersResponse.data.forEach(player => {
+        summaryResponse.data.forEach(player => {
           if (player.position_id && player.position_name) {
             positionMapping[player.position_id] = player.position_name;
           }
@@ -68,11 +74,11 @@ function FPLData() {
     
     try {
       const url = gameweekId 
-        ? buildApiUrl(`/api/stored-fpl-data?gameweek=${gameweekId}`)
-        : buildApiUrl('/api/stored-fpl-data');
+        ? buildApiUrl(`/api/gameweek-fpl-data?gameweek=${gameweekId}`)
+        : buildApiUrl('/api/gameweek-fpl-data');
       
       const response = await axios.get(url);
-      setPlayers(response.data);
+      setDetailsPlayers(response.data);
       setLoading(false);
     } catch (err) {
       setError('Failed to fetch player data for selected gameweek');
@@ -81,9 +87,10 @@ function FPLData() {
   };
 
   const getSortedPlayers = () => {
-    if (!sortConfig.key) return players;
+    const currentPlayers = activeTab === 'summary' ? summaryPlayers : detailsPlayers;
+    if (!sortConfig.key) return currentPlayers;
 
-    return [...players].sort((a, b) => {
+    return [...currentPlayers].sort((a, b) => {
       let aValue = a[sortConfig.key];
       let bValue = b[sortConfig.key];
 
@@ -146,31 +153,65 @@ function FPLData() {
       {error && <p style={{color: 'red'}}>{error}</p>}
       {!loading && !error && (
         <div>
-          {/* Gameweek Filter */}
-          <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label htmlFor="gameweek-select" style={{ fontWeight: 'bold' }}>
-              Filter by Gameweek:
-            </label>
-            <select
-              id="gameweek-select"
-              value={selectedGameweek}
-              onChange={(e) => handleGameweekChange(e.target.value)}
+          {/* Tabs */}
+          <div style={{ marginBottom: '20px', borderBottom: '1px solid #ccc' }}>
+            <button
+              onClick={() => setActiveTab('summary')}
               style={{
-                padding: '8px 12px',
-                borderRadius: '4px',
-                border: '1px solid #ccc',
-                fontSize: '14px',
-                minWidth: '200px'
+                padding: '10px 20px',
+                marginRight: '5px',
+                border: 'none',
+                background: activeTab === 'summary' ? '#007bff' : '#f8f9fa',
+                color: activeTab === 'summary' ? 'white' : '#333',
+                cursor: 'pointer',
+                borderRadius: '4px 4px 0 0'
               }}
             >
-              <option value="">Latest Data (All Gameweeks)</option>
-              {gameweeks.map(gameweek => (
-                <option key={gameweek.gameweek_id} value={gameweek.gameweek_id}>
-                  {gameweek.name} {gameweek.is_current && '(Current)'} {gameweek.is_next && '(Next)'}
-                </option>
-              ))}
-            </select>
+              Summary
+            </button>
+            <button
+              onClick={() => setActiveTab('details')}
+              style={{
+                padding: '10px 20px',
+                marginRight: '5px',
+                border: 'none',
+                background: activeTab === 'details' ? '#007bff' : '#f8f9fa',
+                color: activeTab === 'details' ? 'white' : '#333',
+                cursor: 'pointer',
+                borderRadius: '4px 4px 0 0'
+              }}
+            >
+              Details
+            </button>
           </div>
+
+          {/* Gameweek Filter - Only show in Details tab */}
+          {activeTab === 'details' && (
+            <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label htmlFor="gameweek-select" style={{ fontWeight: 'bold' }}>
+                Filter by Gameweek:
+              </label>
+              <select
+                id="gameweek-select"
+                value={selectedGameweek}
+                onChange={(e) => handleGameweekChange(e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  fontSize: '14px',
+                  minWidth: '200px'
+                }}
+              >
+                <option value="">All Gameweeks</option>
+                {gameweeks.map(gameweek => (
+                  <option key={gameweek.gameweek_id} value={gameweek.gameweek_id}>
+                    {gameweek.name} {gameweek.is_current && '(Current)'} {gameweek.is_next && '(Next)'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           
           <div style={{overflowX: 'auto'}}>
             <table>
@@ -185,9 +226,11 @@ function FPLData() {
                 <th onClick={() => handleSort('element_type')} style={{cursor: 'pointer'}}>
                   Position {getSortIcon('element_type')}
                 </th>
-                <th onClick={() => handleSort('gameweek_name')} style={{cursor: 'pointer'}}>
-                  Gameweek {getSortIcon('gameweek_name')}
-                </th>
+                {activeTab === 'details' && (
+                  <th onClick={() => handleSort('gameweek_name')} style={{cursor: 'pointer'}}>
+                    Gameweek {getSortIcon('gameweek_name')}
+                  </th>
+                )}
                 <th onClick={() => handleSort('now_cost')} style={{cursor: 'pointer'}}>
                   Price (£m) {getSortIcon('now_cost')}
                 </th>
@@ -301,7 +344,9 @@ function FPLData() {
                   <td>{player.first_name} {player.second_name}</td>
                   <td>{teams[player.team_code]?.name || player.team_code}</td>
                   <td>{positions[player.element_type] || player.element_type}</td>
-                  <td>{player.gameweek_name || 'N/A'}</td>
+                  {activeTab === 'details' && (
+                    <td>{player.gameweek_name || 'N/A'}</td>
+                  )}
                   <td>{(player.now_cost / 10).toFixed(1)}</td>
                   <td>{player.total_points}</td>
                   <td>{player.form}</td>

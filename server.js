@@ -88,9 +88,57 @@ async function initializeDatabase() {
       )
     `);
     
-    // Create players table
+    // Create players table (for summary/accumulated data)
     await client.query(`
       CREATE TABLE IF NOT EXISTS cursor.players (
+        id SERIAL PRIMARY KEY,
+        fpl_id INTEGER NOT NULL,
+        first_name VARCHAR(100) NOT NULL,
+        second_name VARCHAR(100) NOT NULL,
+        team_code INTEGER REFERENCES cursor.teams(team_code),
+        position_id INTEGER REFERENCES cursor.positions(position_id),
+        now_cost INTEGER,
+        total_points INTEGER,
+        form DECIMAL(10,2),
+        points_per_game DECIMAL(10,2),
+        value_form DECIMAL(10,2),
+        value_season DECIMAL(10,2),
+        selected_by_percent DECIMAL(10,2),
+        minutes INTEGER,
+        goals_scored INTEGER,
+        assists INTEGER,
+        clean_sheets INTEGER,
+        goals_conceded INTEGER,
+        own_goals INTEGER,
+        penalties_saved INTEGER,
+        penalties_missed INTEGER,
+        yellow_cards INTEGER,
+        red_cards INTEGER,
+        saves INTEGER,
+        bonus INTEGER,
+        influence DECIMAL(10,2),
+        creativity DECIMAL(10,2),
+        threat DECIMAL(10,2),
+        ict_index DECIMAL(10,2),
+        defensive_contribution DECIMAL(10,2),
+        starts INTEGER,
+        expected_goals DECIMAL(10,2),
+        expected_assists DECIMAL(10,2),
+        expected_goal_involvements DECIMAL(10,2),
+        expected_goals_conceded DECIMAL(10,2),
+        expected_goals_per_90 DECIMAL(10,2),
+        saves_per_90 DECIMAL(10,2),
+        expected_assists_per_90 DECIMAL(10,2),
+        expected_goals_conceded_per_90 DECIMAL(10,2),
+        goals_conceded_per_90 DECIMAL(10,2),
+        clean_sheets_per_90 DECIMAL(10,2),
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create gameweek_players table (for gameweek-specific data)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cursor.gameweek_players (
         id SERIAL PRIMARY KEY,
         fpl_id INTEGER NOT NULL,
         gameweek_id INTEGER REFERENCES cursor.gameweeks(gameweek_id),
@@ -323,8 +371,44 @@ app.get('/api/gameweeks', async (req, res) => {
   }
 });
 
-// Get stored FPL data from database (latest data only)
+// Get stored FPL data from database (latest data only - for Summary tab)
 app.get('/api/stored-fpl-data', async (req, res) => {
+  try {
+    const tempPool = new Pool({
+      connectionString: process.env.DATABASE_URL.replace('?sslmode=require', ''),
+      ssl: false
+    });
+    
+    const client = await tempPool.connect();
+    
+    const result = await client.query(`
+      SELECT 
+        p.*,
+        t.name as team_name,
+        t.short_name as team_short_name,
+        pos.singular_name as position_name
+      FROM cursor.players p
+      LEFT JOIN cursor.teams t ON p.team_code = t.team_code
+      LEFT JOIN cursor.positions pos ON p.position_id = pos.position_id
+      WHERE p.last_updated = (
+        SELECT MAX(last_updated) 
+        FROM cursor.players p2 
+        WHERE p2.fpl_id = p.fpl_id
+      )
+      ORDER BY p.total_points DESC
+    `);
+    
+    client.release();
+    tempPool.end();
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching stored FPL data:', error);
+    res.status(500).json({ error: 'Failed to fetch stored FPL data' });
+  }
+});
+
+// Get gameweek-specific FPL data (for Details tab)
+app.get('/api/gameweek-fpl-data', async (req, res) => {
   try {
     const { gameweek } = req.query;
     const tempPool = new Pool({
@@ -336,31 +420,25 @@ app.get('/api/stored-fpl-data', async (req, res) => {
     
     let query = `
       SELECT 
-        p.*,
+        gp.*,
         t.name as team_name,
         t.short_name as team_short_name,
         pos.singular_name as position_name,
         g.name as gameweek_name
-      FROM cursor.players p
-      LEFT JOIN cursor.teams t ON p.team_code = t.team_code
-      LEFT JOIN cursor.positions pos ON p.position_id = pos.position_id
-      LEFT JOIN cursor.gameweeks g ON p.gameweek_id = g.gameweek_id
+      FROM cursor.gameweek_players gp
+      LEFT JOIN cursor.teams t ON gp.team_code = t.team_code
+      LEFT JOIN cursor.positions pos ON gp.position_id = pos.position_id
+      LEFT JOIN cursor.gameweeks g ON gp.gameweek_id = g.gameweek_id
     `;
     
     let params = [];
     
     if (gameweek) {
-      query += ` WHERE p.gameweek_id = $1`;
+      query += ` WHERE gp.gameweek_id = $1`;
       params.push(parseInt(gameweek));
-    } else {
-      query += ` WHERE p.last_updated = (
-        SELECT MAX(last_updated) 
-        FROM cursor.players p2 
-        WHERE p2.fpl_id = p.fpl_id
-      )`;
     }
     
-    query += ` ORDER BY p.total_points DESC`;
+    query += ` ORDER BY gp.total_points DESC`;
     
     const result = await client.query(query, params);
     
@@ -368,8 +446,8 @@ app.get('/api/stored-fpl-data', async (req, res) => {
     tempPool.end();
     res.json(result.rows);
   } catch (error) {
-    console.error('Error fetching stored FPL data:', error);
-    res.status(500).json({ error: 'Failed to fetch stored FPL data' });
+    console.error('Error fetching gameweek FPL data:', error);
+    res.status(500).json({ error: 'Failed to fetch gameweek FPL data' });
   }
 });
 
@@ -451,6 +529,7 @@ async function refreshFPLData() {
     
     // Clear existing data
     await client.query('DELETE FROM cursor.players');
+    await client.query('DELETE FROM cursor.gameweek_players');
     await client.query('DELETE FROM cursor.teams');
     await client.query('DELETE FROM cursor.positions');
     await client.query('DELETE FROM cursor.gameweeks');
@@ -483,10 +562,42 @@ async function refreshFPLData() {
     const currentGameweek = fplData.events.find(event => event.is_current) || fplData.events.find(event => event.is_next) || fplData.events[0];
     const gameweekId = currentGameweek ? currentGameweek.id : 1;
     
-    // Insert players (INSERT only - no upsert to preserve historical data)
+    // Insert players into both tables
     for (const player of fplData.elements) {
+      // Insert into summary table (players)
       await client.query(`
         INSERT INTO cursor.players (
+          fpl_id, first_name, second_name, team_code, position_id, now_cost, total_points,
+          form, points_per_game, value_form, value_season, selected_by_percent, minutes,
+          goals_scored, assists, clean_sheets, goals_conceded, own_goals, penalties_saved,
+          penalties_missed, yellow_cards, red_cards, saves, bonus, influence, creativity,
+          threat, ict_index, defensive_contribution, starts, expected_goals, expected_assists,
+          expected_goal_involvements, expected_goals_conceded, expected_goals_per_90,
+          saves_per_90, expected_assists_per_90, expected_goals_conceded_per_90,
+          goals_conceded_per_90, clean_sheets_per_90
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+          $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34,
+          $35, $36, $37, $38, $39, $40
+        )
+        `,
+        [
+          player.id, player.first_name, player.second_name, player.team_code, player.element_type,
+          player.now_cost, player.total_points, player.form, player.points_per_game, player.value_form,
+          player.value_season, player.selected_by_percent, player.minutes, player.goals_scored,
+          player.assists, player.clean_sheets, player.goals_conceded, player.own_goals,
+          player.penalties_saved, player.penalties_missed, player.yellow_cards, player.red_cards,
+          player.saves, player.bonus, player.influence, player.creativity, player.threat,
+          player.ict_index, player.defensive_contribution, player.starts, player.expected_goals,
+          player.expected_assists, player.expected_goal_involvements, player.expected_goals_conceded,
+          player.expected_goals_per_90, player.saves_per_90, player.expected_assists_per_90,
+          player.expected_goals_conceded_per_90, player.goals_conceded_per_90, player.clean_sheets_per_90
+        ]
+      );
+      
+      // Insert into gameweek-specific table (gameweek_players)
+      await client.query(`
+        INSERT INTO cursor.gameweek_players (
           fpl_id, gameweek_id, first_name, second_name, team_code, position_id, now_cost, total_points,
           form, points_per_game, value_form, value_season, selected_by_percent, minutes,
           goals_scored, assists, clean_sheets, goals_conceded, own_goals, penalties_saved,
