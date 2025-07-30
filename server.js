@@ -3,6 +3,7 @@ const cors = require('cors');
 const axios = require('axios');
 const { Pool } = require('pg');
 const cron = require('node-cron');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -31,6 +32,9 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Serve static files from the React build
+app.use(express.static(path.join(__dirname, 'build')));
+
 // Initialize database with cursor schema
 async function initializeDatabase() {
   try {
@@ -45,96 +49,113 @@ async function initializeDatabase() {
     // Create cursor schema if it doesn't exist
     await client.query('CREATE SCHEMA IF NOT EXISTS cursor');
     
-    // Drop existing tables to recreate with correct schema
-    await client.query('DROP TABLE IF EXISTS cursor.players CASCADE');
-    await client.query('DROP TABLE IF EXISTS cursor.teams CASCADE');
-    await client.query('DROP TABLE IF EXISTS cursor.positions CASCADE');
-    await client.query('DROP TABLE IF EXISTS cursor.gameweeks CASCADE');
+    // Only create tables if they don't exist (don't drop them)
+    // This preserves existing data
     
-    // Create teams table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS cursor.teams (
-        id SERIAL PRIMARY KEY,
-        team_code INTEGER UNIQUE NOT NULL,
-        name VARCHAR(100) NOT NULL,
-        short_name VARCHAR(50),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
+    // Check if tables already exist to avoid unnecessary operations
+    const tablesExist = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'cursor' 
+        AND table_name = 'players'
+      );
     `);
     
-    // Create positions table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS cursor.positions (
-        id SERIAL PRIMARY KEY,
-        position_id INTEGER UNIQUE NOT NULL,
-        singular_name VARCHAR(50) NOT NULL,
-        plural_name VARCHAR(50),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    if (!tablesExist.rows[0].exists) {
+      console.log('📊 Creating database tables for first time...');
+      
+      // Create teams table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS cursor.teams (
+          id SERIAL PRIMARY KEY,
+          team_code INTEGER UNIQUE NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          short_name VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      // Create positions table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS cursor.positions (
+          id SERIAL PRIMARY KEY,
+          position_id INTEGER UNIQUE NOT NULL,
+          singular_name VARCHAR(50) NOT NULL,
+          plural_name VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
 
-    // Create gameweeks table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS cursor.gameweeks (
-        id SERIAL PRIMARY KEY,
-        gameweek_id INTEGER UNIQUE NOT NULL,
-        name VARCHAR(50) NOT NULL,
-        deadline_time TIMESTAMP,
-        is_current BOOLEAN DEFAULT FALSE,
-        is_next BOOLEAN DEFAULT FALSE,
-        is_previous BOOLEAN DEFAULT FALSE,
-        finished BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    
-    // Create players table (for summary/accumulated data)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS cursor.players (
-        id SERIAL PRIMARY KEY,
-        fpl_id INTEGER NOT NULL,
-        first_name VARCHAR(100) NOT NULL,
-        second_name VARCHAR(100) NOT NULL,
-        team_code INTEGER REFERENCES cursor.teams(team_code),
-        position_id INTEGER REFERENCES cursor.positions(position_id),
-        now_cost INTEGER,
-        total_points INTEGER,
-        form DECIMAL(10,2),
-        points_per_game DECIMAL(10,2),
-        value_form DECIMAL(10,2),
-        value_season DECIMAL(10,2),
-        selected_by_percent DECIMAL(10,2),
-        minutes INTEGER,
-        goals_scored INTEGER,
-        assists INTEGER,
-        clean_sheets INTEGER,
-        goals_conceded INTEGER,
-        own_goals INTEGER,
-        penalties_saved INTEGER,
-        penalties_missed INTEGER,
-        yellow_cards INTEGER,
-        red_cards INTEGER,
-        saves INTEGER,
-        bonus INTEGER,
-        influence DECIMAL(10,2),
-        creativity DECIMAL(10,2),
-        threat DECIMAL(10,2),
-        ict_index DECIMAL(10,2),
-        defensive_contribution DECIMAL(10,2),
-        starts INTEGER,
-        expected_goals DECIMAL(10,2),
-        expected_assists DECIMAL(10,2),
-        expected_goal_involvements DECIMAL(10,2),
-        expected_goals_conceded DECIMAL(10,2),
-        expected_goals_per_90 DECIMAL(10,2),
-        saves_per_90 DECIMAL(10,2),
-        expected_assists_per_90 DECIMAL(10,2),
-        expected_goals_conceded_per_90 DECIMAL(10,2),
-        goals_conceded_per_90 DECIMAL(10,2),
-        clean_sheets_per_90 DECIMAL(10,2),
-        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+      // Create gameweeks table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS cursor.gameweeks (
+          id SERIAL PRIMARY KEY,
+          gameweek_id INTEGER UNIQUE NOT NULL,
+          name VARCHAR(50) NOT NULL,
+          deadline_time TIMESTAMP,
+          is_current BOOLEAN DEFAULT FALSE,
+          is_next BOOLEAN DEFAULT FALSE,
+          is_previous BOOLEAN DEFAULT FALSE,
+          finished BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      // Create players table (for summary/accumulated data)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS cursor.players (
+          id SERIAL PRIMARY KEY,
+          fpl_id INTEGER UNIQUE NOT NULL,
+          first_name VARCHAR(100) NOT NULL,
+          second_name VARCHAR(100) NOT NULL,
+          team_code INTEGER REFERENCES cursor.teams(team_code),
+          position_id INTEGER REFERENCES cursor.positions(position_id),
+          now_cost INTEGER,
+          total_points INTEGER,
+          form DECIMAL(10,2),
+          points_per_game DECIMAL(10,2),
+          value_form DECIMAL(10,2),
+          value_season DECIMAL(10,2),
+          selected_by_percent DECIMAL(10,2),
+          minutes INTEGER,
+          goals_scored INTEGER,
+          assists INTEGER,
+          clean_sheets INTEGER,
+          goals_conceded INTEGER,
+          own_goals INTEGER,
+          penalties_saved INTEGER,
+          penalties_missed INTEGER,
+          yellow_cards INTEGER,
+          red_cards INTEGER,
+          saves INTEGER,
+          bonus INTEGER,
+          influence DECIMAL(10,2),
+          creativity DECIMAL(10,2),
+          threat DECIMAL(10,2),
+          ict_index DECIMAL(10,2),
+          defensive_contribution DECIMAL(10,2),
+          starts INTEGER,
+          expected_goals DECIMAL(10,2),
+          expected_assists DECIMAL(10,2),
+          expected_goal_involvements DECIMAL(10,2),
+          expected_goals_conceded DECIMAL(10,2),
+          expected_goals_per_90 DECIMAL(10,2),
+          saves_per_90 DECIMAL(10,2),
+          expected_assists_per_90 DECIMAL(10,2),
+          expected_goals_conceded_per_90 DECIMAL(10,2),
+          goals_conceded_per_90 DECIMAL(10,2),
+          clean_sheets_per_90 DECIMAL(10,2),
+          last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      
+      
+      console.log('✅ Database tables created successfully');
+    } else {
+      console.log('📊 Database tables already exist, skipping creation');
+    }
 
     // Create gameweek_players table (for gameweek-specific data)
     await client.query(`
@@ -647,6 +668,96 @@ cron.schedule('31 18 * * 1', () => {
 });
 
 console.log('⏰ Scheduled FPL data refresh: Every Tuesday at 12:01 AM IST');
+
+// API Routes
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    await client.query('SELECT 1');
+    client.release();
+    res.json({ status: 'Database connection successful' });
+  } catch (error) {
+    res.status(500).json({ error: 'Database connection failed' });
+  }
+});
+
+app.get('/api/gameweeks', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT * FROM cursor.gameweeks ORDER BY gameweek_id');
+    client.release();
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching gameweeks:', error);
+    res.status(500).json({ error: 'Failed to fetch gameweeks' });
+  }
+});
+
+app.get('/api/stored-fpl-data', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT p.*, t.name as team_name, t.short_name as team_short_name, pos.singular_name as position_name
+      FROM cursor.players p
+      LEFT JOIN cursor.teams t ON p.team_code = t.team_code
+      LEFT JOIN cursor.positions pos ON p.position_id = pos.position_id
+      ORDER BY p.total_points DESC
+    `);
+    client.release();
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching stored FPL data:', error);
+    res.status(500).json({ error: 'Failed to fetch FPL data' });
+  }
+});
+
+app.get('/api/gameweek-fpl-data', async (req, res) => {
+  try {
+    const { gameweek } = req.query;
+    const client = await pool.connect();
+    
+    let query = `
+      SELECT gp.*, t.name as team_name, t.short_name as team_short_name, pos.singular_name as position_name, g.name as gameweek_name
+      FROM cursor.gameweek_players gp
+      LEFT JOIN cursor.teams t ON gp.team_code = t.team_code
+      LEFT JOIN cursor.positions pos ON gp.position_id = pos.position_id
+      LEFT JOIN cursor.gameweeks g ON gp.gameweek_id = g.gameweek_id
+    `;
+    
+    if (gameweek) {
+      query += ' WHERE gp.gameweek_id = $1';
+      query += ' ORDER BY gp.total_points DESC';
+      const result = await client.query(query, [gameweek]);
+      client.release();
+      res.json(result.rows);
+    } else {
+      query += ' ORDER BY gp.gameweek_id, gp.total_points DESC';
+      const result = await client.query(query);
+      client.release();
+      res.json(result.rows);
+    }
+  } catch (error) {
+    console.error('Error fetching gameweek FPL data:', error);
+    res.status(500).json({ error: 'Failed to fetch gameweek FPL data' });
+  }
+});
+
+// Manual FPL data refresh endpoint
+app.post('/api/refresh-fpl-data', async (req, res) => {
+  try {
+    console.log('🔄 Manual FPL data refresh triggered');
+    await refreshFPLData();
+    res.json({ message: 'FPL data refresh completed successfully' });
+  } catch (error) {
+    console.error('❌ Error during manual FPL data refresh:', error);
+    res.status(500).json({ error: 'Failed to refresh FPL data' });
+  }
+});
+
+// Catch-all route to serve React app
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
 
 app.listen(PORT, () => {
   console.log(`🚀 FPL Server running on http://localhost:${PORT}`);

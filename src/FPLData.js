@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { buildApiUrl } from './config';
+import Analysis from './Analysis';
 
 function FPLData() {
   const [activeTab, setActiveTab] = useState('summary');
@@ -183,6 +184,20 @@ function FPLData() {
             >
               Details
             </button>
+            <button
+              onClick={() => setActiveTab('analysis')}
+              style={{
+                padding: '10px 20px',
+                marginRight: '5px',
+                border: 'none',
+                background: activeTab === 'analysis' ? '#007bff' : '#f8f9fa',
+                color: activeTab === 'analysis' ? 'white' : '#333',
+                cursor: 'pointer',
+                borderRadius: '4px 4px 0 0'
+              }}
+            >
+              Analysis
+            </button>
           </div>
 
           {/* Gameweek Filter - Only show in Details tab */}
@@ -212,8 +227,19 @@ function FPLData() {
               </select>
             </div>
           )}
-          
-          <div style={{overflowX: 'auto'}}>
+
+          {/* Analysis Tab Content */}
+          {activeTab === 'analysis' && (
+            <Analysis 
+              players={summaryPlayers} 
+              teams={teams} 
+              positions={positions} 
+            />
+          )}
+
+          {/* Summary and Details Tab Content */}
+          {(activeTab === 'summary' || activeTab === 'details') && (
+            <div style={{overflowX: 'auto'}}>
             <table>
             <thead>
               <tr>
@@ -387,6 +413,7 @@ function FPLData() {
             </tbody>
           </table>
         </div>
+          )}
         </div>
       )}
     </div>
