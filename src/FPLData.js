@@ -223,8 +223,8 @@ function FPLData() {
                 <th onClick={() => handleSort('team_code')} style={{cursor: 'pointer'}}>
                   Team {getSortIcon('team_code')}
                 </th>
-                <th onClick={() => handleSort('element_type')} style={{cursor: 'pointer'}}>
-                  Position {getSortIcon('element_type')}
+                <th onClick={() => handleSort('position_id')} style={{cursor: 'pointer'}}>
+                  Position {getSortIcon('position_id')}
                 </th>
                 {activeTab === 'details' && (
                   <th onClick={() => handleSort('gameweek_name')} style={{cursor: 'pointer'}}>
@@ -343,7 +343,7 @@ function FPLData() {
                 <tr key={player.id}>
                   <td>{player.first_name} {player.second_name}</td>
                   <td>{teams[player.team_code]?.name || player.team_code}</td>
-                  <td>{positions[player.element_type] || player.element_type}</td>
+                  <td>{positions[player.position_id] || player.position_name || 'N/A'}</td>
                   {activeTab === 'details' && (
                     <td>{player.gameweek_name || 'N/A'}</td>
                   )}
