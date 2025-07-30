@@ -21,7 +21,9 @@ const pool = new Pool({
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://your-netlify-site.netlify.app', // Replace with your actual Netlify domain
+    'https://fpldataanalysis.netlify.app',
+    'https://www.gameshaastra.in',
+    'https://gameshaastra.in',
     process.env.FRONTEND_URL // Allow environment variable override
   ].filter(Boolean),
   credentials: true
