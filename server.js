@@ -49,6 +49,7 @@ async function initializeDatabase() {
     await client.query('DROP TABLE IF EXISTS cursor.players CASCADE');
     await client.query('DROP TABLE IF EXISTS cursor.teams CASCADE');
     await client.query('DROP TABLE IF EXISTS cursor.positions CASCADE');
+    await client.query('DROP TABLE IF EXISTS cursor.gameweeks CASCADE');
     
     // Create teams table
     await client.query(`
@@ -71,12 +72,28 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Create gameweeks table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cursor.gameweeks (
+        id SERIAL PRIMARY KEY,
+        gameweek_id INTEGER UNIQUE NOT NULL,
+        name VARCHAR(50) NOT NULL,
+        deadline_time TIMESTAMP,
+        is_current BOOLEAN DEFAULT FALSE,
+        is_next BOOLEAN DEFAULT FALSE,
+        is_previous BOOLEAN DEFAULT FALSE,
+        finished BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
     
     // Create players table
     await client.query(`
       CREATE TABLE IF NOT EXISTS cursor.players (
         id SERIAL PRIMARY KEY,
         fpl_id INTEGER NOT NULL,
+        gameweek_id INTEGER REFERENCES cursor.gameweeks(gameweek_id),
         first_name VARCHAR(100) NOT NULL,
         second_name VARCHAR(100) NOT NULL,
         team_code INTEGER REFERENCES cursor.teams(team_code),
@@ -285,10 +302,31 @@ app.get('/api/player-history/:fplId', async (req, res) => {
   }
 });
 
+// Get available gameweeks
+app.get('/api/gameweeks', async (req, res) => {
+  try {
+    const tempPool = new Pool({
+      connectionString: process.env.DATABASE_URL.replace('?sslmode=require', ''),
+      ssl: false
+    });
+    const client = await tempPool.connect();
+    const result = await client.query(`
+      SELECT * FROM cursor.gameweeks 
+      ORDER BY gameweek_id ASC
+    `);
+    client.release();
+    tempPool.end();
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching gameweeks:', error);
+    res.status(500).json({ error: 'Failed to fetch gameweeks' });
+  }
+});
+
 // Get stored FPL data from database (latest data only)
 app.get('/api/stored-fpl-data', async (req, res) => {
   try {
-    // Use the same SSL configuration as initialization
+    const { gameweek } = req.query;
     const tempPool = new Pool({
       connectionString: process.env.DATABASE_URL.replace('?sslmode=require', ''),
       ssl: false
@@ -296,22 +334,35 @@ app.get('/api/stored-fpl-data', async (req, res) => {
     
     const client = await tempPool.connect();
     
-    const result = await client.query(`
+    let query = `
       SELECT 
         p.*,
         t.name as team_name,
         t.short_name as team_short_name,
-        pos.singular_name as position_name
+        pos.singular_name as position_name,
+        g.name as gameweek_name
       FROM cursor.players p
       LEFT JOIN cursor.teams t ON p.team_code = t.team_code
       LEFT JOIN cursor.positions pos ON p.position_id = pos.position_id
-      WHERE p.last_updated = (
+      LEFT JOIN cursor.gameweeks g ON p.gameweek_id = g.gameweek_id
+    `;
+    
+    let params = [];
+    
+    if (gameweek) {
+      query += ` WHERE p.gameweek_id = $1`;
+      params.push(parseInt(gameweek));
+    } else {
+      query += ` WHERE p.last_updated = (
         SELECT MAX(last_updated) 
         FROM cursor.players p2 
         WHERE p2.fpl_id = p.fpl_id
-      )
-      ORDER BY p.total_points DESC
-    `);
+      )`;
+    }
+    
+    query += ` ORDER BY p.total_points DESC`;
+    
+    const result = await client.query(query, params);
     
     client.release();
     tempPool.end();
@@ -402,6 +453,15 @@ async function refreshFPLData() {
     await client.query('DELETE FROM cursor.players');
     await client.query('DELETE FROM cursor.teams');
     await client.query('DELETE FROM cursor.positions');
+    await client.query('DELETE FROM cursor.gameweeks');
+    
+    // Insert gameweeks
+    for (const event of fplData.events) {
+      await client.query(
+        'INSERT INTO cursor.gameweeks (gameweek_id, name, deadline_time, is_current, is_next, is_previous, finished) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (gameweek_id) DO UPDATE SET name = $2, deadline_time = $3, is_current = $4, is_next = $5, is_previous = $6, finished = $7',
+        [event.id, event.name, event.deadline_time, event.is_current, event.is_next, event.is_previous, event.finished]
+      );
+    }
     
     // Insert teams
     for (const team of fplData.teams) {
@@ -419,11 +479,15 @@ async function refreshFPLData() {
       );
     }
     
+    // Find current gameweek
+    const currentGameweek = fplData.events.find(event => event.is_current) || fplData.events.find(event => event.is_next) || fplData.events[0];
+    const gameweekId = currentGameweek ? currentGameweek.id : 1;
+    
     // Insert players (INSERT only - no upsert to preserve historical data)
     for (const player of fplData.elements) {
       await client.query(`
         INSERT INTO cursor.players (
-          fpl_id, first_name, second_name, team_code, position_id, now_cost, total_points,
+          fpl_id, gameweek_id, first_name, second_name, team_code, position_id, now_cost, total_points,
           form, points_per_game, value_form, value_season, selected_by_percent, minutes,
           goals_scored, assists, clean_sheets, goals_conceded, own_goals, penalties_saved,
           penalties_missed, yellow_cards, red_cards, saves, bonus, influence, creativity,
@@ -434,11 +498,11 @@ async function refreshFPLData() {
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
           $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34,
-          $35, $36, $37, $38, $39, $40
+          $35, $36, $37, $38, $39, $40, $41
         )
         `,
         [
-          player.id, player.first_name, player.second_name, player.team_code, player.element_type,
+          player.id, gameweekId, player.first_name, player.second_name, player.team_code, player.element_type,
           player.now_cost, player.total_points, player.form, player.points_per_game, player.value_form,
           player.value_season, player.selected_by_percent, player.minutes, player.goals_scored,
           player.assists, player.clean_sheets, player.goals_conceded, player.own_goals,
