@@ -141,25 +141,32 @@ function Analysis({ players, teams, positions }) {
 
   // Handle chart click
   const handleChartClick = (event, elements) => {
-    console.log('Chart clicked!', event, elements);
+    console.log('🎯 Chart clicked!', event, elements);
+    console.log('Event type:', event.type);
+    console.log('Elements:', elements);
     
     if (elements && elements.length > 0) {
       const element = elements[0];
       const dataPoint = element.raw;
-      console.log('Data point clicked:', dataPoint);
+      console.log('✅ Data point clicked:', dataPoint);
       
       const playersAtPoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
-      console.log('Players at this point:', playersAtPoint);
+      console.log('🔍 Players at this point:', playersAtPoint);
       
       setClickedCoordinates({ x: dataPoint.x, y: dataPoint.y });
       setPlayersAtClickedPoint(playersAtPoint);
       
-      console.log(`Clicked on point: ${dataPoint.x}, ${dataPoint.y}`);
-      console.log(`Found ${playersAtPoint.length} players at this point`);
+      console.log(`📍 Clicked on point: £${dataPoint.x}m, ${dataPoint.y} pts`);
+      console.log(`👥 Found ${playersAtPoint.length} players at this point`);
     } else {
-      console.log('No elements found in click event');
+      console.log('❌ No elements found in click event');
+      console.log('Event details:', event);
     }
   };
+
+  // Debug: Log function definition
+  console.log('🔧 handleChartClick function defined:', typeof handleChartClick);
+  console.log('🔧 handleChartClick function:', handleChartClick);
 
   // Get unique positions for filter
   const uniquePositions = Object.entries(positions).map(([id, name]) => ({
@@ -227,6 +234,7 @@ function Analysis({ players, teams, positions }) {
       axis: 'xy',
       intersect: false
     },
+    onClick: handleChartClick,
     plugins: {
       title: {
         display: true,
@@ -432,7 +440,7 @@ function Analysis({ players, teams, positions }) {
       {/* ROI Chart */}
       <div className="chart-container">
         <div style={{ height: '500px', width: '100%' }}>
-          <Scatter data={chartData} options={chartOptions} onClick={handleChartClick} />
+          <Scatter data={chartData} options={chartOptions} />
         </div>
       </div>
 
