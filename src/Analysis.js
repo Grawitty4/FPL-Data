@@ -241,6 +241,10 @@ function Analysis({ players, teams, positions }) {
     ]
   };
 
+  // Debug: Log chart data
+  console.log('📊 Chart data prepared:', chartData);
+  console.log('📊 First few data points:', chartData.datasets[0].data.slice(0, 3));
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -249,7 +253,13 @@ function Analysis({ players, teams, positions }) {
       axis: 'xy',
       intersect: false
     },
-    onClick: handleChartClick,
+    onClick: (event, elements, chart) => {
+      console.log('🎯 Chart.js onClick triggered!', event, elements, chart);
+      handleChartClick(event, elements);
+    },
+    onHover: (event, elements) => {
+      console.log('🖱️ Chart hover:', event, elements);
+    },
     plugins: {
       title: {
         display: true,
@@ -455,7 +465,14 @@ function Analysis({ players, teams, positions }) {
       {/* ROI Chart */}
       <div className="chart-container">
         <div style={{ height: '500px', width: '100%' }}>
-          <Scatter data={chartData} options={chartOptions} />
+          <Scatter 
+            data={chartData} 
+            options={chartOptions} 
+            onClick={handleChartClick}
+            onMouseMove={(event, elements) => {
+              console.log('🖱️ Scatter onMouseMove:', event, elements);
+            }}
+          />
         </div>
       </div>
 
