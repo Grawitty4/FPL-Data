@@ -27,6 +27,8 @@ function Analysis({ players, teams, positions }) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedPosition, setSelectedPosition] = useState('all');
   const [filteredPlayers, setFilteredPlayers] = useState([]);
+  const [clickedCoordinates, setClickedCoordinates] = useState(null);
+  const [playersAtClickedPoint, setPlayersAtClickedPoint] = useState([]);
 
   // Classify players based on starts
   const classifyPlayers = (players) => {
@@ -130,6 +132,28 @@ function Analysis({ players, teams, positions }) {
     })));
   }
   
+  // Function to get players at specific coordinates
+  const getPlayersAtCoordinates = (x, y) => {
+    return displayPlayers.filter(player => 
+      Math.abs(player.price - x) < 0.1 && Math.abs(player.points - y) < 0.1
+    );
+  };
+
+  // Handle chart click
+  const handleChartClick = (event, elements) => {
+    if (elements.length > 0) {
+      const element = elements[0];
+      const dataPoint = element.raw;
+      const playersAtPoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
+      
+      setClickedCoordinates({ x: dataPoint.x, y: dataPoint.y });
+      setPlayersAtClickedPoint(playersAtPoint);
+      
+      console.log(`Clicked on point: ${dataPoint.x}, ${dataPoint.y}`);
+      console.log(`Players at this point:`, playersAtPoint);
+    }
+  };
+
   // Get unique positions for filter
   const uniquePositions = Object.entries(positions).map(([id, name]) => ({
     id: parseInt(id),
@@ -212,17 +236,53 @@ function Analysis({ players, teams, positions }) {
         callbacks: {
           title: (context) => {
             const dataPoint = context[0].raw;
-            return dataPoint.playerName;
+            const playersAtPoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
+            
+            if (playersAtPoint.length > 1) {
+              return `${playersAtPoint.length} Players at Same Point (${dataPoint.y} pts, £${dataPoint.x}m)`;
+            } else {
+              return dataPoint.playerName;
+            }
           },
           label: (context) => {
             const dataPoint = context.raw;
-            return [
-              `Team: ${dataPoint.team}`,
-              `Position: ${dataPoint.position}`,
-              `Price: £${dataPoint.x}m`,
-              `Points: ${dataPoint.y}`,
-              `Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`
-            ];
+            const playersAtPoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
+            
+            if (playersAtPoint.length > 1) {
+              // Show first few players in tooltip
+              const labels = [
+                `📊 ${playersAtPoint.length} players at this point`,
+                `💰 Price: £${dataPoint.x}m`,
+                `⚽ Points: ${dataPoint.y}`,
+                `📍 Position: ${dataPoint.position}`,
+                `🏆 Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+                '',
+                '👥 Players (first 3):'
+              ];
+              
+              // Add first 3 players
+              playersAtPoint.slice(0, 3).forEach((player, index) => {
+                const teamName = teams[player.team_code]?.name || player.team_code;
+                labels.push(`${index + 1}. ${player.playerName} (${teamName})`);
+              });
+              
+              if (playersAtPoint.length > 3) {
+                labels.push(`... and ${playersAtPoint.length - 3} more`);
+                labels.push('💡 Click the point to see all players!');
+              }
+              
+              return labels;
+            } else {
+              // Single player tooltip
+              return [
+                `Team: ${dataPoint.team}`,
+                `Position: ${dataPoint.position}`,
+                `Price: £${dataPoint.x}m`,
+                `Points: ${dataPoint.y}`,
+                `Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+                '💡 Click to select this player'
+              ];
+            }
           }
         }
       },
@@ -419,14 +479,45 @@ function Analysis({ players, teams, positions }) {
       {/* ROI Chart */}
       <div className="chart-container">
         <div style={{ height: '500px', width: '100%' }}>
-          <Scatter data={chartData} options={chartOptions} />
+          <Scatter data={chartData} options={chartOptions} onClick={handleChartClick} />
         </div>
       </div>
 
-      {/* Player List */}
-      <div className="player-list">
-        <h3>Players in Selected Category</h3>
-        <div className="player-grid">
+      {/* Players in Selected Category */}
+      <div className="mt-8">
+        <h3 className="text-xl font-semibold mb-4">
+          Players in Selected Category
+          {clickedCoordinates && (
+            <span className="ml-2 text-sm text-blue-600">
+              (Click on chart to select different players)
+            </span>
+          )}
+        </h3>
+        
+        {clickedCoordinates && playersAtClickedPoint.length > 0 && (
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 className="font-semibold text-blue-800 mb-2">
+              📍 Players at Point: £{clickedCoordinates.x}m, {clickedCoordinates.y} pts
+              <span className="ml-2 text-sm text-blue-600">
+                ({playersAtClickedPoint.length} players)
+              </span>
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {playersAtClickedPoint.map((player, index) => (
+                <div key={`${player.fpl_id}-${index}`} className="p-3 bg-white border border-blue-200 rounded-md">
+                  <div className="font-medium text-blue-900">{player.playerName}</div>
+                  <div className="text-sm text-blue-700">{teams[player.team_code]?.name || player.team_code}</div>
+                  <div className="text-sm text-blue-600">{positions[player.position_id] || 'N/A'}</div>
+                  <div className="text-xs text-blue-500">
+                    £{(player.price).toFixed(1)}m • {player.points} pts • {player.starts} starts
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {displayPlayers.map(player => (
             <div key={player.id} className="player-card">
               <h4>{player.playerName}</h4>
