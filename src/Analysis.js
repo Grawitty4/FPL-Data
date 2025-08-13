@@ -230,25 +230,7 @@ function Analysis({ players, teams, positions }) {
         }
       },
       tooltip: {
-        enabled: true,
-        mode: 'nearest',
-        intersect: false,
-        callbacks: {
-          title: (context) => {
-            const dataPoint = context[0].raw;
-            return dataPoint.playerName;
-          },
-          label: (context) => {
-            const dataPoint = context.raw;
-            return [
-              `Team: ${dataPoint.team}`,
-              `Position: ${dataPoint.position}`,
-              `Price: £${dataPoint.x}m`,
-              `Points: ${dataPoint.y}`,
-              `Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`
-            ];
-          }
-        }
+        enabled: false
       },
       legend: {
         display: false
@@ -451,45 +433,40 @@ function Analysis({ players, teams, positions }) {
       <div className="mt-8">
         <h3 className="text-xl font-semibold mb-4">
           Players in Selected Category
-          {clickedCoordinates && (
+          {clickedCoordinates && playersAtClickedPoint.length > 0 && (
             <span className="ml-2 text-sm text-blue-600">
-              (Showing players at clicked point)
+              (Showing {playersAtClickedPoint.length} players at clicked point)
             </span>
           )}
         </h3>
         
         {clickedCoordinates && playersAtClickedPoint.length > 0 && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
-            <div className="text-sm text-blue-800">
-              📍 Players at £{clickedCoordinates.x}m, {clickedCoordinates.y} pts ({playersAtClickedPoint.length} players)
-              <button 
-                onClick={() => {
-                  setClickedCoordinates(null);
-                  setPlayersAtClickedPoint([]);
-                }}
-                className="ml-2 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 rounded"
-              >
-                ✕ Clear
-              </button>
-            </div>
+          <div className="mb-4 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+            📍 £{clickedCoordinates.x}m, {clickedCoordinates.y} pts
+            <button 
+              onClick={() => {
+                setClickedCoordinates(null);
+                setPlayersAtClickedPoint([]);
+              }}
+              className="ml-2 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 rounded"
+            >
+              ✕ Clear
+            </button>
           </div>
         )}
         
-        <div className="player-list">
-          <div className="player-grid">
-            {(clickedCoordinates && playersAtClickedPoint.length > 0 ? playersAtClickedPoint : displayPlayers).map(player => (
-              <div key={player.id} className="player-card">
-                <div className="player-name">{player.playerName}</div>
-                <div className="player-team">{teams[player.team_code]?.name || player.team_code}</div>
-                <div className="player-position">{positions[player.position_id] || 'N/A'}</div>
-                <div className="player-stats">
-                  <span>£{(player.price).toFixed(1)}m</span>
-                  <span>{player.points} pts</span>
-                  <span>{player.starts} starts</span>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {(clickedCoordinates && playersAtClickedPoint.length > 0 ? playersAtClickedPoint : displayPlayers).map(player => (
+            <div key={player.id} className="player-card">
+              <h4>{player.playerName}</h4>
+              <p><strong>Team:</strong> {teams[player.team_code]?.name || player.team_code}</p>
+              <p><strong>Position:</strong> {positions[player.position_id] || 'N/A'}</p>
+              <p><strong>Price:</strong> £{player.price}m</p>
+              <p><strong>Points:</strong> {player.points}</p>
+              <p><strong>Starts:</strong> {player.starts}</p>
+              <p><strong>Category:</strong> {player.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+            </div>
+          ))}
         </div>
       </div>
     </div>
