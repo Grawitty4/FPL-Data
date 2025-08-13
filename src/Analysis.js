@@ -236,53 +236,17 @@ function Analysis({ players, teams, positions }) {
         callbacks: {
           title: (context) => {
             const dataPoint = context[0].raw;
-            const playersAtPoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
-            
-            if (playersAtPoint.length > 1) {
-              return `${playersAtPoint.length} Players at Same Point (${dataPoint.y} pts, £${dataPoint.x}m)`;
-            } else {
-              return dataPoint.playerName;
-            }
+            return dataPoint.playerName;
           },
           label: (context) => {
             const dataPoint = context.raw;
-            const playersAtPoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
-            
-            if (playersAtPoint.length > 1) {
-              // Show first few players in tooltip
-              const labels = [
-                `📊 ${playersAtPoint.length} players at this point`,
-                `💰 Price: £${dataPoint.x}m`,
-                `⚽ Points: ${dataPoint.y}`,
-                `📍 Position: ${dataPoint.position}`,
-                `🏆 Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
-                '',
-                '👥 Players (first 3):'
-              ];
-              
-              // Add first 3 players
-              playersAtPoint.slice(0, 3).forEach((player, index) => {
-                const teamName = teams[player.team_code]?.name || player.team_code;
-                labels.push(`${index + 1}. ${player.playerName} (${teamName})`);
-              });
-              
-              if (playersAtPoint.length > 3) {
-                labels.push(`... and ${playersAtPoint.length - 3} more`);
-                labels.push('💡 Click the point to see all players!');
-              }
-              
-              return labels;
-            } else {
-              // Single player tooltip
-              return [
-                `Team: ${dataPoint.team}`,
-                `Position: ${dataPoint.position}`,
-                `Price: £${dataPoint.x}m`,
-                `Points: ${dataPoint.y}`,
-                `Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
-                '💡 Click to select this player'
-              ];
-            }
+            return [
+              `Team: ${dataPoint.team}`,
+              `Position: ${dataPoint.position}`,
+              `Price: £${dataPoint.x}m`,
+              `Points: ${dataPoint.y}`,
+              `Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`
+            ];
           }
         }
       },
@@ -489,46 +453,43 @@ function Analysis({ players, teams, positions }) {
           Players in Selected Category
           {clickedCoordinates && (
             <span className="ml-2 text-sm text-blue-600">
-              (Click on chart to select different players)
+              (Showing players at clicked point)
             </span>
           )}
         </h3>
         
         {clickedCoordinates && playersAtClickedPoint.length > 0 && (
-          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h4 className="font-semibold text-blue-800 mb-2">
-              📍 Players at Point: £{clickedCoordinates.x}m, {clickedCoordinates.y} pts
-              <span className="ml-2 text-sm text-blue-600">
-                ({playersAtClickedPoint.length} players)
-              </span>
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {playersAtClickedPoint.map((player, index) => (
-                <div key={`${player.fpl_id}-${index}`} className="p-3 bg-white border border-blue-200 rounded-md">
-                  <div className="font-medium text-blue-900">{player.playerName}</div>
-                  <div className="text-sm text-blue-700">{teams[player.team_code]?.name || player.team_code}</div>
-                  <div className="text-sm text-blue-600">{positions[player.position_id] || 'N/A'}</div>
-                  <div className="text-xs text-blue-500">
-                    £{(player.price).toFixed(1)}m • {player.points} pts • {player.starts} starts
-                  </div>
-                </div>
-              ))}
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+            <div className="text-sm text-blue-800">
+              📍 Players at £{clickedCoordinates.x}m, {clickedCoordinates.y} pts ({playersAtClickedPoint.length} players)
+              <button 
+                onClick={() => {
+                  setClickedCoordinates(null);
+                  setPlayersAtClickedPoint([]);
+                }}
+                className="ml-2 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 rounded"
+              >
+                ✕ Clear
+              </button>
             </div>
           </div>
         )}
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {displayPlayers.map(player => (
-            <div key={player.id} className="player-card">
-              <h4>{player.playerName}</h4>
-              <p><strong>Team:</strong> {teams[player.team_code]?.name || player.team_code}</p>
-              <p><strong>Position:</strong> {positions[player.position_id] || 'N/A'}</p>
-              <p><strong>Price:</strong> £{player.price}m</p>
-              <p><strong>Points:</strong> {player.points}</p>
-              <p><strong>Starts:</strong> {player.starts}</p>
-              <p><strong>Category:</strong> {player.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
-            </div>
-          ))}
+        <div className="player-list">
+          <div className="player-grid">
+            {(clickedCoordinates && playersAtClickedPoint.length > 0 ? playersAtClickedPoint : displayPlayers).map(player => (
+              <div key={player.id} className="player-card">
+                <div className="player-name">{player.playerName}</div>
+                <div className="player-team">{teams[player.team_code]?.name || player.team_code}</div>
+                <div className="player-position">{positions[player.position_id] || 'N/A'}</div>
+                <div className="player-stats">
+                  <span>£{(player.price).toFixed(1)}m</span>
+                  <span>{player.points} pts</span>
+                  <span>{player.starts} starts</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
