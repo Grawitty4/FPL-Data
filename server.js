@@ -46,8 +46,8 @@ async function initializeDatabase() {
     
     const client = await tempPool.connect();
     
-    // Create cursor schema if it doesn't exist
-    await client.query('CREATE SCHEMA IF NOT EXISTS cursor');
+    // Create cursor_fpl_data schema if it doesn't exist
+    await client.query('CREATE SCHEMA IF NOT EXISTS cursor_fpl_data');
     
     // Only create tables if they don't exist (don't drop them)
     // This preserves existing data
@@ -56,7 +56,7 @@ async function initializeDatabase() {
     const tablesExist = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
-        WHERE table_schema = 'cursor' 
+        WHERE table_schema = 'cursor_fpl_data' 
         AND table_name = 'players'
       );
     `);
@@ -66,7 +66,7 @@ async function initializeDatabase() {
       
       // Create teams table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS cursor.teams (
+        CREATE TABLE IF NOT EXISTS cursor_fpl_data.teams (
           id SERIAL PRIMARY KEY,
           team_code INTEGER UNIQUE NOT NULL,
           name VARCHAR(100) NOT NULL,
@@ -77,7 +77,7 @@ async function initializeDatabase() {
       
       // Create positions table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS cursor.positions (
+        CREATE TABLE IF NOT EXISTS cursor_fpl_data.positions (
           id SERIAL PRIMARY KEY,
           position_id INTEGER UNIQUE NOT NULL,
           singular_name VARCHAR(50) NOT NULL,
@@ -88,7 +88,7 @@ async function initializeDatabase() {
 
       // Create gameweeks table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS cursor.gameweeks (
+        CREATE TABLE IF NOT EXISTS cursor_fpl_data.gameweeks (
           id SERIAL PRIMARY KEY,
           gameweek_id INTEGER UNIQUE NOT NULL,
           name VARCHAR(50) NOT NULL,
@@ -103,13 +103,13 @@ async function initializeDatabase() {
       
       // Create players table (for summary/accumulated data)
       await client.query(`
-        CREATE TABLE IF NOT EXISTS cursor.players (
+        CREATE TABLE IF NOT EXISTS cursor_fpl_data.players (
           id SERIAL PRIMARY KEY,
           fpl_id INTEGER UNIQUE NOT NULL,
           first_name VARCHAR(100) NOT NULL,
           second_name VARCHAR(100) NOT NULL,
-          team_code INTEGER REFERENCES cursor.teams(team_code),
-          position_id INTEGER REFERENCES cursor.positions(position_id),
+          team_code INTEGER REFERENCES cursor_fpl_data.teams(team_code),
+          position_id INTEGER REFERENCES cursor_fpl_data.positions(position_id),
           now_cost INTEGER,
           total_points INTEGER,
           form DECIMAL(10,2),
@@ -159,14 +159,14 @@ async function initializeDatabase() {
 
     // Create gameweek_players table (for gameweek-specific data)
     await client.query(`
-      CREATE TABLE IF NOT EXISTS cursor.gameweek_players (
+      CREATE TABLE IF NOT EXISTS cursor_fpl_data.gameweek_players (
         id SERIAL PRIMARY KEY,
         fpl_id INTEGER NOT NULL,
-        gameweek_id INTEGER REFERENCES cursor.gameweeks(gameweek_id),
+        gameweek_id INTEGER REFERENCES cursor_fpl_data.gameweeks(gameweek_id),
         first_name VARCHAR(100) NOT NULL,
         second_name VARCHAR(100) NOT NULL,
-        team_code INTEGER REFERENCES cursor.teams(team_code),
-        position_id INTEGER REFERENCES cursor.positions(position_id),
+        team_code INTEGER REFERENCES cursor_fpl_data.teams(team_code),
+        position_id INTEGER REFERENCES cursor_fpl_data.positions(position_id),
         now_cost INTEGER,
         total_points INTEGER,
         form DECIMAL(10,2),
@@ -206,7 +206,7 @@ async function initializeDatabase() {
       )
     `);
     
-    console.log('✅ Database initialized successfully with cursor schema');
+    console.log('✅ Database initialized successfully with cursor_fpl_data schema');
     client.release();
     tempPool.end();
   } catch (error) {
@@ -237,14 +237,14 @@ app.post('/api/store-fpl-data', async (req, res) => {
     const client = await tempPool.connect();
     
     // Clear existing data
-    await client.query('DELETE FROM cursor.players');
-    await client.query('DELETE FROM cursor.teams');
-    await client.query('DELETE FROM cursor.positions');
+    await client.query('DELETE FROM cursor_fpl_data.players');
+    await client.query('DELETE FROM cursor_fpl_data.teams');
+    await client.query('DELETE FROM cursor_fpl_data.positions');
     
     // Insert teams
     for (const team of req.body.teams) {
       await client.query(
-        'INSERT INTO cursor.teams (team_code, name, short_name) VALUES ($1, $2, $3) ON CONFLICT (team_code) DO UPDATE SET name = $2, short_name = $3',
+        'INSERT INTO cursor_fpl_data.teams (team_code, name, short_name) VALUES ($1, $2, $3) ON CONFLICT (team_code) DO UPDATE SET name = $2, short_name = $3',
         [team.code, team.name, team.short_name]
       );
     }
@@ -252,7 +252,7 @@ app.post('/api/store-fpl-data', async (req, res) => {
     // Insert positions
     for (const position of req.body.element_types) {
       await client.query(
-        'INSERT INTO cursor.positions (position_id, singular_name, plural_name) VALUES ($1, $2, $3) ON CONFLICT (position_id) DO UPDATE SET singular_name = $2, plural_name = $3',
+        'INSERT INTO cursor_fpl_data.positions (position_id, singular_name, plural_name) VALUES ($1, $2, $3) ON CONFLICT (position_id) DO UPDATE SET singular_name = $2, plural_name = $3',
         [position.id, position.singular_name, position.plural_name]
       );
     }
@@ -260,7 +260,7 @@ app.post('/api/store-fpl-data', async (req, res) => {
     // Insert players
     for (const player of req.body.elements) {
       await client.query(`
-        INSERT INTO cursor.players (
+        INSERT INTO cursor_fpl_data.players (
           fpl_id, first_name, second_name, team_code, position_id, now_cost, total_points,
           form, points_per_game, value_form, value_season, selected_by_percent, minutes,
           goals_scored, assists, clean_sheets, goals_conceded, own_goals, penalties_saved,
@@ -332,8 +332,8 @@ app.get('/api/cron-status', (req, res) => {
       status: 'Cron job is scheduled and running',
       currentTime: now.toISOString(),
       nextScheduledRun: nextRun.toISOString(),
-      cronExpression: '31 18 * * 1 (Every Monday at 6:31 PM UTC)',
-      timezone: 'UTC',
+      cronExpression: '31 18 * * 1 (Every Tuesday at 12:01 AM IST)',
+      timezone: 'Asia/Kolkata',
       lastDataUpdate: null // This will be populated when we add tracking
     });
   } catch (error) {
@@ -349,7 +349,7 @@ app.get('/api/data-status', async (req, res) => {
     // Get latest data update time
     const latestData = await client.query(`
       SELECT MAX(created_at) as last_update, COUNT(*) as total_players 
-      FROM cursor.players
+      FROM cursor_fpl_data.players
     `);
     
     // Get gameweek info
@@ -359,7 +359,7 @@ app.get('/api/data-status', async (req, res) => {
         MAX(gameweek_id) as latest_gameweek,
         SUM(CASE WHEN is_current THEN 1 ELSE 0 END) as current_gameweeks,
         SUM(CASE WHEN is_next THEN 1 ELSE 0 END) as next_gameweeks
-      FROM cursor.gameweeks
+      FROM cursor_fpl_data.gameweeks
     `);
     
     client.release();
@@ -387,13 +387,13 @@ function getNextCronRun() {
   const now = new Date();
   const nextRun = new Date(now);
   
-  // Set to next Monday at 18:31 UTC
-  const daysUntilMonday = (1 - now.getUTCDay() + 7) % 7;
-  nextRun.setUTCDate(now.getUTCDate() + daysUntilMonday);
-  nextRun.setUTCHours(18, 31, 0, 0);
+  // Set to next Tuesday at 00:01 IST (Monday 18:31 UTC)
+  const daysUntilTuesday = (2 - now.getUTCDay() + 7) % 7;
+  nextRun.setUTCDate(now.getUTCDate() + daysUntilTuesday);
+  nextRun.setUTCHours(18, 31, 0, 0); // 6:31 PM UTC = 12:01 AM IST (next day)
   
-  // If it's already Monday and past 18:31, move to next Monday
-  if (now.getUTCDay() === 1 && now.getUTCHours() >= 18 && now.getUTCMinutes() >= 31) {
+  // If it's already Tuesday and past 00:01 IST (Monday past 18:31 UTC), move to next Tuesday
+  if (now.getUTCDay() === 2 && now.getUTCHours() >= 0 && now.getUTCMinutes() >= 1) {
     nextRun.setUTCDate(nextRun.getUTCDate() + 7);
   }
   
@@ -419,9 +419,9 @@ app.get('/api/player-history/:fplId', async (req, res) => {
         t.name as team_name,
         t.short_name as team_short_name,
         pos.singular_name as position_name
-      FROM cursor.players p
-      LEFT JOIN cursor.teams t ON p.team_code = t.team_code
-      LEFT JOIN cursor.positions pos ON p.position_id = pos.position_id
+      FROM cursor_fpl_data.players p
+      LEFT JOIN cursor_fpl_data.teams t ON p.team_code = t.team_code
+      LEFT JOIN cursor_fpl_data.positions pos ON p.position_id = pos.position_id
       WHERE p.fpl_id = $1
       ORDER BY p.last_updated DESC
     `, [fplId]);
@@ -480,22 +480,22 @@ app.get('/api/stored-fpl-data', async (req, res) => {
     
     const client = await tempPool.connect();
     
-    const result = await client.query(`
-      SELECT 
-        p.*,
-        t.name as team_name,
-        t.short_name as team_short_name,
-        pos.singular_name as position_name
-      FROM cursor.players p
-      LEFT JOIN cursor.teams t ON p.team_code = t.team_code
-      LEFT JOIN cursor.positions pos ON p.position_id = pos.position_id
-      WHERE p.last_updated = (
-        SELECT MAX(last_updated) 
-        FROM cursor.players p2 
-        WHERE p2.fpl_id = p.fpl_id
-      )
-      ORDER BY p.total_points DESC
-    `);
+          const result = await client.query(`
+        SELECT 
+          p.*,
+          t.name as team_name,
+          t.short_name as team_short_name,
+          pos.singular_name as position_name
+        FROM cursor_fpl_data.players p
+        LEFT JOIN cursor_fpl_data.teams t ON p.team_code = t.team_code
+        LEFT JOIN cursor_fpl_data.positions pos ON p.position_id = pos.position_id
+        WHERE p.last_updated = (
+          SELECT MAX(last_updated) 
+          FROM cursor_fpl_data.players p2 
+          WHERE p2.fpl_id = p.fpl_id
+        )
+        ORDER BY p.total_points DESC
+      `);
     
     client.release();
     tempPool.end();
@@ -524,10 +524,10 @@ app.get('/api/gameweek-fpl-data', async (req, res) => {
         t.short_name as team_short_name,
         pos.singular_name as position_name,
         g.name as gameweek_name
-      FROM cursor.gameweek_players gp
-      LEFT JOIN cursor.teams t ON gp.team_code = t.team_code
-      LEFT JOIN cursor.positions pos ON gp.position_id = pos.position_id
-      LEFT JOIN cursor.gameweeks g ON gp.gameweek_id = g.gameweek_id
+      FROM cursor_fpl_data.gameweek_players gp
+      LEFT JOIN cursor_fpl_data.teams t ON gp.team_code = t.team_code
+      LEFT JOIN cursor_fpl_data.positions pos ON gp.position_id = pos.position_id
+      LEFT JOIN cursor_fpl_data.gameweeks g ON gp.gameweek_id = g.gameweek_id
     `;
     
     let params = [];
@@ -599,16 +599,16 @@ async function refreshFPLData() {
     console.log(`📅 Refresh timestamp: ${refreshTimestamp}`);
     
     // Clear existing data (keeping historical approach for now, but adding timestamp tracking)
-    await client.query('DELETE FROM cursor.players');
-    await client.query('DELETE FROM cursor.gameweek_players');
-    await client.query('DELETE FROM cursor.teams');
-    await client.query('DELETE FROM cursor.positions');
-    await client.query('DELETE FROM cursor.gameweeks');
+    await client.query('DELETE FROM cursor_fpl_data.players');
+    await client.query('DELETE FROM cursor_fpl_data.gameweek_players');
+    await client.query('DELETE FROM cursor_fpl_data.teams');
+    await client.query('DELETE FROM cursor_fpl_data.positions');
+    await client.query('DELETE FROM cursor_fpl_data.gameweeks');
     
     // Insert gameweeks
     for (const event of fplData.events) {
       await client.query(
-        'INSERT INTO cursor.gameweeks (gameweek_id, name, deadline_time, is_current, is_next, is_previous, finished) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (gameweek_id) DO UPDATE SET name = $2, deadline_time = $3, is_current = $4, is_next = $5, is_previous = $6, finished = $7',
+        'INSERT INTO cursor_fpl_data.gameweeks (gameweek_id, name, deadline_time, is_current, is_next, is_previous, finished) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (gameweek_id) DO UPDATE SET name = $2, deadline_time = $3, is_current = $4, is_next = $5, is_previous = $6, finished = $7',
         [event.id, event.name, event.deadline_time, event.is_current, event.is_next, event.is_previous, event.finished]
       );
     }
@@ -616,7 +616,7 @@ async function refreshFPLData() {
     // Insert teams
     for (const team of fplData.teams) {
       await client.query(
-        'INSERT INTO cursor.teams (team_code, name, short_name) VALUES ($1, $2, $3) ON CONFLICT (team_code) DO UPDATE SET name = $2, short_name = $3',
+        'INSERT INTO cursor_fpl_data.teams (team_code, name, short_name) VALUES ($1, $2, $3) ON CONFLICT (team_code) DO UPDATE SET name = $2, short_name = $3',
         [team.code, team.name, team.short_name]
       );
     }
@@ -624,7 +624,7 @@ async function refreshFPLData() {
     // Insert positions
     for (const position of fplData.element_types) {
       await client.query(
-        'INSERT INTO cursor.positions (position_id, singular_name, plural_name) VALUES ($1, $2, $3) ON CONFLICT (position_id) DO UPDATE SET singular_name = $2, plural_name = $3',
+        'INSERT INTO cursor_fpl_data.positions (position_id, singular_name, plural_name) VALUES ($1, $2, $3) ON CONFLICT (position_id) DO UPDATE SET singular_name = $2, plural_name = $3',
         [position.id, position.singular_name, position.plural_name]
       );
     }
@@ -639,7 +639,7 @@ async function refreshFPLData() {
     for (const player of fplData.elements) {
       // Insert into summary table (players)
       await client.query(`
-        INSERT INTO cursor.players (
+        INSERT INTO cursor_fpl_data.players (
           fpl_id, first_name, second_name, team_code, position_id, now_cost, total_points,
           form, points_per_game, value_form, value_season, selected_by_percent, minutes,
           goals_scored, assists, clean_sheets, goals_conceded, own_goals, penalties_saved,
@@ -670,7 +670,7 @@ async function refreshFPLData() {
       
       // Insert into gameweek-specific table (gameweek_players)
       await client.query(`
-        INSERT INTO cursor.gameweek_players (
+        INSERT INTO cursor_fpl_data.gameweek_players (
           fpl_id, gameweek_id, first_name, second_name, team_code, position_id, now_cost, total_points,
           form, points_per_game, value_form, value_season, selected_by_percent, minutes,
           goals_scored, assists, clean_sheets, goals_conceded, own_goals, penalties_saved,
@@ -709,17 +709,17 @@ async function refreshFPLData() {
   }
 }
 
-// Schedule FPL data refresh every Tuesday at 12:01 AM IST (6:31 PM UTC Monday)
+// Schedule FPL data refresh every Tuesday at 12:01 AM IST (Indian Standard Time)
 // Cron format: minute hour day month day-of-week
-// Railway runs in UTC, so we schedule for 6:31 PM UTC Monday (which is 12:01 AM IST Tuesday)
+// IST is UTC+5:30, so 12:01 AM IST = 6:31 PM UTC (previous day)
 cron.schedule('31 18 * * 1', () => {
   refreshFPLData();
 }, {
   scheduled: true,
-  timezone: "UTC"  // Changed from "Asia/Kolkata" to "UTC" for Railway deployment
+  timezone: "Asia/Kolkata"  // Reverted back to IST as designed
 });
 
-console.log('⏰ Scheduled FPL data refresh: Every Monday at 6:31 PM UTC (Tuesday 12:01 AM IST)');
+console.log('⏰ Scheduled FPL data refresh: Every Tuesday at 12:01 AM IST (Monday 6:31 PM UTC)');
 
 // API Routes
 app.get('/api/test-db', async (req, res) => {
@@ -736,7 +736,7 @@ app.get('/api/test-db', async (req, res) => {
 app.get('/api/gameweeks', async (req, res) => {
   try {
     const client = await pool.connect();
-    const result = await client.query('SELECT * FROM cursor.gameweeks ORDER BY gameweek_id');
+    const result = await client.query('SELECT * FROM cursor_fpl_data.gameweeks ORDER BY gameweek_id');
     client.release();
     res.json(result.rows);
   } catch (error) {
@@ -750,9 +750,9 @@ app.get('/api/stored-fpl-data', async (req, res) => {
     const client = await pool.connect();
     const result = await client.query(`
       SELECT p.*, t.name as team_name, t.short_name as team_short_name, pos.singular_name as position_name
-      FROM cursor.players p
-      LEFT JOIN cursor.teams t ON p.team_code = t.team_code
-      LEFT JOIN cursor.positions pos ON p.position_id = pos.position_id
+      FROM cursor_fpl_data.players p
+      LEFT JOIN cursor_fpl_data.teams t ON p.team_code = t.team_code
+      LEFT JOIN cursor_fpl_data.positions pos ON p.position_id = pos.position_id
       ORDER BY p.total_points DESC
     `);
     client.release();
@@ -770,10 +770,10 @@ app.get('/api/gameweek-fpl-data', async (req, res) => {
     
     let query = `
       SELECT gp.*, t.name as team_name, t.short_name as team_short_name, pos.singular_name as position_name, g.name as gameweek_name
-      FROM cursor.gameweek_players gp
-      LEFT JOIN cursor.teams t ON gp.team_code = t.team_code
-      LEFT JOIN cursor.positions pos ON gp.position_id = pos.position_id
-      LEFT JOIN cursor.gameweeks g ON gp.gameweek_id = g.gameweek_id
+      FROM cursor_fpl_data.gameweek_players gp
+      LEFT JOIN cursor_fpl_data.teams t ON gp.team_code = t.team_code
+      LEFT JOIN cursor_fpl_data.positions pos ON gp.position_id = pos.position_id
+      LEFT JOIN cursor_fpl_data.gameweeks g ON gp.gameweek_id = g.gameweek_id
     `;
     
     if (gameweek) {
@@ -814,6 +814,6 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 FPL Server running on http://localhost:${PORT}`);
   console.log(`📊 Database connected successfully`);
-  console.log(`⏰ Cron job scheduled for every Monday at 6:31 PM UTC`); // Force new deployment
+  console.log(`⏰ Cron job scheduled for every Tuesday at 12:01 AM IST`); // Correct IST time
   console.log(`🔄 Auto-deployment from GitHub enabled`); // Test GitHub auto-deployment
 }); 
