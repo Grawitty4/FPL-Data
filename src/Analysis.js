@@ -77,6 +77,15 @@ function Analysis({ players, teams, positions }) {
     }
   }, [players]);
 
+  // Debug: Monitor state changes
+  useEffect(() => {
+    console.log('🔄 clickedCoordinates changed:', clickedCoordinates);
+  }, [clickedCoordinates]);
+
+  useEffect(() => {
+    console.log('🔄 playersAtClickedPoint changed:', playersAtClickedPoint);
+  }, [playersAtClickedPoint]);
+
   const getCategoryPlayers = (category) => {
     let players = filteredPlayers;
     
@@ -134,9 +143,13 @@ function Analysis({ players, teams, positions }) {
   
   // Function to get players at specific coordinates
   const getPlayersAtCoordinates = (x, y) => {
-    return displayPlayers.filter(player => 
+    console.log('🔍 getPlayersAtCoordinates called with:', x, y);
+    console.log('🔍 displayPlayers available:', displayPlayers.length);
+    const found = displayPlayers.filter(player => 
       Math.abs(player.price - x) < 0.1 && Math.abs(player.points - y) < 0.1
     );
+    console.log('🔍 Found players:', found);
+    return found;
   };
 
   // Handle chart click
@@ -153,6 +166,7 @@ function Analysis({ players, teams, positions }) {
       const playersAtPoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
       console.log('🔍 Players at this point:', playersAtPoint);
       
+      console.log('🔄 Setting state...');
       setClickedCoordinates({ x: dataPoint.x, y: dataPoint.y });
       setPlayersAtClickedPoint(playersAtPoint);
       
