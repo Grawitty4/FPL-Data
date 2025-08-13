@@ -188,13 +188,6 @@ function Analysis({ players, teams, positions }) {
     ]
   };
 
-  // Function to get all players at the same coordinates
-  const getPlayersAtCoordinates = (x, y) => {
-    return displayPlayers.filter(player => 
-      Math.abs(player.price - x) < 0.1 && Math.abs(player.points - y) < 0.1
-    );
-  };
-
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
