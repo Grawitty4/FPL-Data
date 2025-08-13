@@ -815,4 +815,5 @@ app.listen(PORT, () => {
   console.log(`🚀 FPL Server running on http://localhost:${PORT}`);
   console.log(`📊 Database connected successfully`);
   console.log(`⏰ Cron job scheduled for every Monday at 6:31 PM UTC`); // Force new deployment
+  console.log(`🔄 Auto-deployment from GitHub enabled`); // Test GitHub auto-deployment
 }); 
