@@ -19,7 +19,6 @@ const customTooltipPlugin = {
     const tooltip = chart.tooltip;
     if (tooltip.opacity > 0) {
       const ctx = chart.ctx;
-      const position = chart.canvas.getBoundingClientRect();
       
       // Custom tooltip rendering for better scrolling
       if (tooltip.body && tooltip.body.length > 0) {
