@@ -141,16 +141,23 @@ function Analysis({ players, teams, positions }) {
 
   // Handle chart click
   const handleChartClick = (event, elements) => {
-    if (elements.length > 0) {
+    console.log('Chart clicked!', event, elements);
+    
+    if (elements && elements.length > 0) {
       const element = elements[0];
       const dataPoint = element.raw;
+      console.log('Data point clicked:', dataPoint);
+      
       const playersAtPoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
+      console.log('Players at this point:', playersAtPoint);
       
       setClickedCoordinates({ x: dataPoint.x, y: dataPoint.y });
       setPlayersAtClickedPoint(playersAtPoint);
       
       console.log(`Clicked on point: ${dataPoint.x}, ${dataPoint.y}`);
-      console.log(`Players at this point:`, playersAtPoint);
+      console.log(`Found ${playersAtPoint.length} players at this point`);
+    } else {
+      console.log('No elements found in click event');
     }
   };
 
@@ -440,6 +447,25 @@ function Analysis({ players, teams, positions }) {
           )}
         </h3>
         
+        {/* Debug: Test button */}
+        <div className="mb-4 p-2 bg-gray-100 border rounded text-sm">
+          <button 
+            onClick={() => {
+              console.log('Test button clicked');
+              console.log('Current clickedCoordinates:', clickedCoordinates);
+              console.log('Current playersAtClickedPoint:', playersAtClickedPoint);
+              console.log('displayPlayers count:', displayPlayers.length);
+            }}
+            className="px-3 py-1 bg-gray-300 hover:bg-gray-400 rounded text-xs"
+          >
+            🐛 Debug: Check State
+          </button>
+          <span className="ml-2 text-gray-600">
+            Clicked: {clickedCoordinates ? `£${clickedCoordinates.x}m, ${clickedCoordinates.y}pts` : 'None'} | 
+            Players at point: {playersAtClickedPoint.length}
+          </span>
+        </div>
+        
         {clickedCoordinates && playersAtClickedPoint.length > 0 && (
           <div className="mb-4 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
             📍 £{clickedCoordinates.x}m, {clickedCoordinates.y} pts
@@ -455,18 +481,20 @@ function Analysis({ players, teams, positions }) {
           </div>
         )}
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {(clickedCoordinates && playersAtClickedPoint.length > 0 ? playersAtClickedPoint : displayPlayers).map(player => (
-            <div key={player.id} className="player-card">
-              <h4>{player.playerName}</h4>
-              <p><strong>Team:</strong> {teams[player.team_code]?.name || player.team_code}</p>
-              <p><strong>Position:</strong> {positions[player.position_id] || 'N/A'}</p>
-              <p><strong>Price:</strong> £{player.price}m</p>
-              <p><strong>Points:</strong> {player.points}</p>
-              <p><strong>Starts:</strong> {player.starts}</p>
-              <p><strong>Category:</strong> {player.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
-            </div>
-          ))}
+        <div className="player-list">
+          <div className="player-grid">
+            {(clickedCoordinates && playersAtClickedPoint.length > 0 ? playersAtClickedPoint : displayPlayers).map(player => (
+              <div key={player.id} className="player-card">
+                <h4>{player.playerName}</h4>
+                <p><strong>Team:</strong> {teams[player.team_code]?.name || player.team_code}</p>
+                <p><strong>Position:</strong> {positions[player.position_id] || 'N/A'}</p>
+                <p><strong>Price:</strong> £{player.price}m</p>
+                <p><strong>Points:</strong> {player.points}</p>
+                <p><strong>Starts:</strong> {player.starts}</p>
+                <p><strong>Category:</strong> {player.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
