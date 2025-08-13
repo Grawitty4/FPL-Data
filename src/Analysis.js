@@ -162,6 +162,11 @@ function Analysis({ players, teams, positions }) {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'nearest',
+      axis: 'xy',
+      intersect: false
+    },
     plugins: {
       title: {
         display: true,
@@ -172,6 +177,9 @@ function Analysis({ players, teams, positions }) {
         }
       },
       tooltip: {
+        enabled: true,
+        mode: 'nearest',
+        intersect: false,
         callbacks: {
           title: (context) => {
             const dataPoint = context[0].raw;
