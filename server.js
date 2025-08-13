@@ -458,7 +458,7 @@ app.get('/api/gameweeks', async (req, res) => {
     });
     const client = await tempPool.connect();
     const result = await client.query(`
-      SELECT * FROM cursor.gameweeks 
+      SELECT * FROM cursor_fpl_data.gameweeks 
       ORDER BY gameweek_id ASC
     `);
     client.release();
@@ -470,41 +470,7 @@ app.get('/api/gameweeks', async (req, res) => {
   }
 });
 
-// Get stored FPL data from database (latest data only - for Summary tab)
-app.get('/api/stored-fpl-data', async (req, res) => {
-  try {
-    const tempPool = new Pool({
-      connectionString: process.env.DATABASE_URL.replace('?sslmode=require', ''),
-      ssl: false
-    });
-    
-    const client = await tempPool.connect();
-    
-          const result = await client.query(`
-        SELECT 
-          p.*,
-          t.name as team_name,
-          t.short_name as team_short_name,
-          pos.singular_name as position_name
-        FROM cursor_fpl_data.players p
-        LEFT JOIN cursor_fpl_data.teams t ON p.team_code = t.team_code
-        LEFT JOIN cursor_fpl_data.positions pos ON p.position_id = pos.position_id
-        WHERE p.last_updated = (
-          SELECT MAX(last_updated) 
-          FROM cursor_fpl_data.players p2 
-          WHERE p2.fpl_id = p.fpl_id
-        )
-        ORDER BY p.total_points DESC
-      `);
-    
-    client.release();
-    tempPool.end();
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching stored FPL data:', error);
-    res.status(500).json({ error: 'Failed to fetch stored FPL data' });
-  }
-});
+
 
 // Get gameweek-specific FPL data (for Details tab)
 app.get('/api/gameweek-fpl-data', async (req, res) => {
@@ -749,11 +715,12 @@ app.get('/api/stored-fpl-data', async (req, res) => {
   try {
     const client = await pool.connect();
     const result = await client.query(`
-      SELECT p.*, t.name as team_name, t.short_name as team_short_name, pos.singular_name as position_name
+      SELECT DISTINCT ON (p.fpl_id) 
+        p.*, t.name as team_name, t.short_name as team_short_name, pos.singular_name as position_name
       FROM cursor_fpl_data.players p
       LEFT JOIN cursor_fpl_data.teams t ON p.team_code = t.team_code
       LEFT JOIN cursor_fpl_data.positions pos ON p.position_id = pos.position_id
-      ORDER BY p.total_points DESC
+      ORDER BY p.fpl_id, p.created_at DESC
     `);
     client.release();
     res.json(result.rows);
