@@ -56,6 +56,20 @@ function Analysis({ players, teams, positions }) {
 
   useEffect(() => {
     if (players && players.length > 0) {
+      console.log('Analysis component received players:', players.length);
+      console.log('Sample players:', players.slice(0, 3));
+      
+      // Check for duplicates
+      const fplIds = players.map(p => p.fpl_id);
+      const uniqueIds = new Set(fplIds);
+      console.log('Unique FPL IDs:', uniqueIds.size, 'Total players:', players.length);
+      
+      if (fplIds.length !== uniqueIds.size) {
+        console.warn('DUPLICATE PLAYERS DETECTED!');
+        const duplicates = fplIds.filter((id, index) => fplIds.indexOf(id) !== index);
+        console.log('Duplicate FPL IDs:', [...new Set(duplicates)]);
+      }
+      
       const classifiedPlayers = classifyPlayers(players);
       setFilteredPlayers(classifiedPlayers);
     }
@@ -110,13 +124,15 @@ function Analysis({ players, teams, positions }) {
     datasets: [
       {
         label: 'Players',
-        data: displayPlayers.map(player => ({
+        data: displayPlayers.map((player, index) => ({
           x: player.price,
           y: player.points,
           playerName: player.playerName,
           team: teams[player.team_code]?.name || player.team_code,
           position: positions[player.position_id] || 'N/A',
-          category: player.category
+          category: player.category,
+          fpl_id: player.fpl_id, // Add unique identifier
+          index: index // Add index for uniqueness
         })),
         backgroundColor: displayPlayers.map(player => {
           switch (player.category) {
@@ -159,7 +175,7 @@ function Analysis({ players, teams, positions }) {
         callbacks: {
           title: (context) => {
             const dataPoint = context[0].raw;
-            return dataPoint.playerName;
+            return `${dataPoint.playerName} (ID: ${dataPoint.fpl_id})`;
           },
           label: (context) => {
             const dataPoint = context.raw;
@@ -168,7 +184,9 @@ function Analysis({ players, teams, positions }) {
               `Position: ${dataPoint.position}`,
               `Price: £${dataPoint.x}m`,
               `Points: ${dataPoint.y}`,
-              `Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`
+              `Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+              `FPL ID: ${dataPoint.fpl_id}`,
+              `Index: ${dataPoint.index}`
             ];
           }
         }
