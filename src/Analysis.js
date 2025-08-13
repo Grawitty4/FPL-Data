@@ -12,6 +12,33 @@ import {
 import { Scatter } from 'react-chartjs-2';
 import annotationPlugin from 'chartjs-plugin-annotation';
 
+// Custom tooltip plugin for better handling of multiple players
+const customTooltipPlugin = {
+  id: 'customTooltip',
+  beforeDraw: (chart) => {
+    const tooltip = chart.tooltip;
+    if (tooltip.opacity > 0) {
+      const ctx = chart.ctx;
+      const position = chart.canvas.getBoundingClientRect();
+      
+      // Custom tooltip rendering for better scrolling
+      if (tooltip.body && tooltip.body.length > 0) {
+        const bodyLines = tooltip.body[0].lines;
+        if (bodyLines.length > 8) { // If more than 8 lines, add scroll indicator
+          ctx.save();
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.fillRect(tooltip.x + 10, tooltip.y + tooltip.height - 20, tooltip.width - 20, 20);
+          ctx.fillStyle = '#000';
+          ctx.font = '12px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('📜 Scroll to see more players', tooltip.x + tooltip.width / 2, tooltip.y + tooltip.height - 5);
+          ctx.restore();
+        }
+      }
+    }
+  }
+};
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -20,7 +47,8 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  annotationPlugin
+  annotationPlugin,
+  customTooltipPlugin
 );
 
 function Analysis({ players, teams, positions }) {
@@ -188,6 +216,13 @@ function Analysis({ players, teams, positions }) {
     ]
   };
 
+  // Function to get all players at the same coordinates
+  const getPlayersAtCoordinates = (x, y) => {
+    return displayPlayers.filter(player => 
+      Math.abs(player.price - x) < 0.1 && Math.abs(player.points - y) < 0.1
+    );
+  };
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -209,22 +244,68 @@ function Analysis({ players, teams, positions }) {
         enabled: true,
         mode: 'nearest',
         intersect: false,
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        titleColor: '#ffffff',
+        bodyColor: '#ffffff',
+        borderColor: '#666',
+        borderWidth: 1,
+        cornerRadius: 8,
+        padding: 12,
+        bodyFont: {
+          size: 12,
+          family: 'monospace'
+        },
+        titleFont: {
+          size: 14,
+          weight: 'bold',
+          family: 'monospace'
+        },
         callbacks: {
           title: (context) => {
             const dataPoint = context[0].raw;
-            return `${dataPoint.playerName} (ID: ${dataPoint.fpl_id})`;
+            const playersAtSamePoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
+            
+            if (playersAtSamePoint.length > 1) {
+              return `${playersAtSamePoint.length} Players at Same Point (${dataPoint.y} pts, £${dataPoint.x}m)`;
+            } else {
+              return `${dataPoint.playerName} (ID: ${dataPoint.fpl_id})`;
+            }
           },
           label: (context) => {
-            const dataPoint = context.raw;
-            return [
-              `Team: ${dataPoint.team}`,
-              `Position: ${dataPoint.position}`,
-              `Price: £${dataPoint.x}m`,
-              `Points: ${dataPoint.y}`,
-              `Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
-              `FPL ID: ${dataPoint.fpl_id}`,
-              `Index: ${dataPoint.index}`
-            ];
+            const dataPoint = context[0].raw;
+            const playersAtSamePoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
+            
+            if (playersAtSamePoint.length > 1) {
+              // Show all players at the same coordinates
+              const labels = [
+                `📊 ${playersAtSamePoint.length} players at this point:`,
+                `💰 Price: £${dataPoint.x}m`,
+                `⚽ Points: ${dataPoint.y}`,
+                `📍 Position: ${dataPoint.position}`,
+                `🏆 Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+                '',
+                '👥 Players:'
+              ];
+              
+              // Add each player with team info
+              playersAtSamePoint.forEach((player, index) => {
+                const teamName = teams[player.team_code]?.name || player.team_code;
+                labels.push(`${index + 1}. ${player.playerName} (${teamName})`);
+              });
+              
+              return labels;
+            } else {
+              // Single player tooltip
+              return [
+                `Team: ${dataPoint.team}`,
+                `Position: ${dataPoint.position}`,
+                `Price: £${dataPoint.x}m`,
+                `Points: ${dataPoint.y}`,
+                `Category: ${dataPoint.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+                `FPL ID: ${dataPoint.fpl_id}`,
+                `Index: ${dataPoint.index}`
+              ];
+            }
           }
         }
       },
