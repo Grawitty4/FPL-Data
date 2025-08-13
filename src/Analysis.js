@@ -161,8 +161,29 @@ function Analysis({ players, teams, positions }) {
     
     if (elements && elements.length > 0) {
       const element = elements[0];
-      const dataPoint = element.raw;
+      console.log('Element:', element);
+      console.log('Element raw:', element.raw);
+      console.log('Element index:', element.index);
+      console.log('Element datasetIndex:', element.datasetIndex);
+      
+      // Safely access the data point
+      let dataPoint;
+      if (element.raw && typeof element.raw === 'object') {
+        dataPoint = element.raw;
+      } else if (element.index !== undefined && element.datasetIndex !== undefined) {
+        // Fallback: get data from chart data
+        dataPoint = chartData.datasets[element.datasetIndex].data[element.index];
+      } else {
+        console.error('❌ Cannot determine data point from element:', element);
+        return;
+      }
+      
       console.log('✅ Data point clicked:', dataPoint);
+      
+      if (!dataPoint || dataPoint.x === undefined || dataPoint.y === undefined) {
+        console.error('❌ Invalid data point:', dataPoint);
+        return;
+      }
       
       const playersAtPoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
       console.log('🔍 Players at this point:', playersAtPoint);
@@ -244,6 +265,9 @@ function Analysis({ players, teams, positions }) {
   // Debug: Log chart data
   console.log('📊 Chart data prepared:', chartData);
   console.log('📊 First few data points:', chartData.datasets[0].data.slice(0, 3));
+  console.log('📊 Sample data point structure:', chartData.datasets[0].data[0]);
+  console.log('📊 Data point x value:', chartData.datasets[0].data[0]?.x);
+  console.log('📊 Data point y value:', chartData.datasets[0].data[0]?.y);
 
   const chartOptions = {
     responsive: true,
