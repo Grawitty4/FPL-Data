@@ -29,6 +29,7 @@ function Analysis({ players, teams, positions }) {
   const [filteredPlayers, setFilteredPlayers] = useState([]);
   const [clickedCoordinates, setClickedCoordinates] = useState(null);
   const [playersAtClickedPoint, setPlayersAtClickedPoint] = useState([]);
+  const [debugCounter, setDebugCounter] = useState(0);
 
   // Classify players based on starts
   const classifyPlayers = (players) => {
@@ -481,6 +482,25 @@ function Analysis({ players, teams, positions }) {
             className="px-3 py-1 bg-gray-300 hover:bg-gray-400 rounded text-xs"
           >
             🐛 Debug: Check State
+          </button>
+          <button 
+            onClick={() => {
+              console.log('Force state update test');
+              setClickedCoordinates({ x: 5.5, y: 45 });
+              setPlayersAtClickedPoint(displayPlayers.slice(0, 3));
+            }}
+            className="ml-2 px-3 py-1 bg-red-300 hover:bg-red-400 rounded text-xs"
+          >
+            🔴 Force State Test
+          </button>
+          <button 
+            onClick={() => {
+              console.log('Increment counter');
+              setDebugCounter(prev => prev + 1);
+            }}
+            className="ml-2 px-3 py-1 bg-green-300 hover:bg-green-400 rounded text-xs"
+          >
+            🟢 Counter: {debugCounter}
           </button>
           <span className="ml-2 text-gray-600">
             Clicked: {clickedCoordinates ? `£${clickedCoordinates.x}m, ${clickedCoordinates.y}pts` : 'None'} | 
