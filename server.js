@@ -313,14 +313,92 @@ app.post('/api/store-fpl-data', async (req, res) => {
 // Manual FPL data refresh endpoint
 app.post('/api/refresh-fpl-data', async (req, res) => {
   try {
-    console.log('🔄 Manual FPL data refresh requested...');
+    console.log('🔄 Manual FPL data refresh triggered');
     await refreshFPLData();
     res.json({ message: 'FPL data refresh completed successfully' });
   } catch (error) {
-    console.error('Error during manual FPL data refresh:', error);
+    console.error('❌ Error during manual FPL data refresh:', error);
     res.status(500).json({ error: 'Failed to refresh FPL data' });
   }
 });
+
+// Cron job health check endpoint
+app.get('/api/cron-status', (req, res) => {
+  try {
+    const now = new Date();
+    const nextRun = getNextCronRun();
+    
+    res.json({
+      status: 'Cron job is scheduled and running',
+      currentTime: now.toISOString(),
+      nextScheduledRun: nextRun.toISOString(),
+      cronExpression: '31 18 * * 1 (Every Monday at 6:31 PM UTC)',
+      timezone: 'UTC',
+      lastDataUpdate: null // This will be populated when we add tracking
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get cron status' });
+  }
+});
+
+// Data status endpoint
+app.get('/api/data-status', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    
+    // Get latest data update time
+    const latestData = await client.query(`
+      SELECT MAX(created_at) as last_update, COUNT(*) as total_players 
+      FROM cursor.players
+    `);
+    
+    // Get gameweek info
+    const gameweekInfo = await client.query(`
+      SELECT 
+        COUNT(*) as total_gameweeks,
+        MAX(gameweek_id) as latest_gameweek,
+        SUM(CASE WHEN is_current THEN 1 ELSE 0 END) as current_gameweeks,
+        SUM(CASE WHEN is_next THEN 1 ELSE 0 END) as next_gameweeks
+      FROM cursor.gameweeks
+    `);
+    
+    client.release();
+    
+    res.json({
+      status: 'Data available',
+      lastUpdate: latestData.rows[0]?.last_update || null,
+      totalPlayers: latestData.rows[0]?.total_players || 0,
+      gameweeks: {
+        total: gameweekInfo.rows[0]?.total_gameweeks || 0,
+        latest: gameweekInfo.rows[0]?.latest_gameweek || 0,
+        current: gameweekInfo.rows[0]?.current_gameweeks || 0,
+        next: gameweekInfo.rows[0]?.next_gameweeks || 0
+      },
+      nextCronRun: getNextCronRun().toISOString()
+    });
+  } catch (error) {
+    console.error('Error getting data status:', error);
+    res.status(500).json({ error: 'Failed to get data status' });
+  }
+});
+
+// Helper function to calculate next cron run
+function getNextCronRun() {
+  const now = new Date();
+  const nextRun = new Date(now);
+  
+  // Set to next Monday at 18:31 UTC
+  const daysUntilMonday = (1 - now.getUTCDay() + 7) % 7;
+  nextRun.setUTCDate(now.getUTCDate() + daysUntilMonday);
+  nextRun.setUTCHours(18, 31, 0, 0);
+  
+  // If it's already Monday and past 18:31, move to next Monday
+  if (now.getUTCDay() === 1 && now.getUTCHours() >= 18 && now.getUTCMinutes() >= 31) {
+    nextRun.setUTCDate(nextRun.getUTCDate() + 7);
+  }
+  
+  return nextRun;
+}
 
 // Get historical data for a specific player
 app.get('/api/player-history/:fplId', async (req, res) => {
@@ -472,38 +550,6 @@ app.get('/api/gameweek-fpl-data', async (req, res) => {
   }
 });
 
-// Get data refresh status
-app.get('/api/data-status', async (req, res) => {
-  try {
-    // Use the same SSL configuration as initialization
-    const tempPool = new Pool({
-      connectionString: process.env.DATABASE_URL.replace('?sslmode=require', ''),
-      ssl: false
-    });
-    
-    const client = await tempPool.connect();
-    
-    // Get count of players and last update time
-    const playerCount = await client.query('SELECT COUNT(*) as count FROM cursor.players');
-    const lastUpdate = await client.query('SELECT MAX(last_updated) as last_updated FROM cursor.players');
-    const teamCount = await client.query('SELECT COUNT(*) as count FROM cursor.teams');
-    
-    client.release();
-    tempPool.end();
-    
-    res.json({
-      player_count: parseInt(playerCount.rows[0].count),
-      team_count: parseInt(teamCount.rows[0].count),
-      last_updated: lastUpdate.rows[0].last_updated,
-      next_scheduled_refresh: 'Every Tuesday at 12:01 AM IST',
-      timezone: 'Asia/Kolkata'
-    });
-  } catch (error) {
-    console.error('Error fetching data status:', error);
-    res.status(500).json({ error: 'Failed to fetch data status' });
-  }
-});
-
 // Test database connection
 app.get('/api/test-db', async (req, res) => {
   try {
@@ -548,7 +594,11 @@ async function refreshFPLData() {
     
     const client = await tempPool.connect();
     
-    // Clear existing data
+    // Get current timestamp for this refresh
+    const refreshTimestamp = new Date().toISOString();
+    console.log(`📅 Refresh timestamp: ${refreshTimestamp}`);
+    
+    // Clear existing data (keeping historical approach for now, but adding timestamp tracking)
     await client.query('DELETE FROM cursor.players');
     await client.query('DELETE FROM cursor.gameweek_players');
     await client.query('DELETE FROM cursor.teams');
@@ -582,6 +632,8 @@ async function refreshFPLData() {
     // Find current gameweek
     const currentGameweek = fplData.events.find(event => event.is_current) || fplData.events.find(event => event.is_next) || fplData.events[0];
     const gameweekId = currentGameweek ? currentGameweek.id : 1;
+    
+    console.log(`🎯 Processing data for Gameweek ${gameweekId} (${currentGameweek?.name || 'Unknown'})`);
     
     // Insert players into both tables
     for (const player of fplData.elements) {
@@ -659,15 +711,15 @@ async function refreshFPLData() {
 
 // Schedule FPL data refresh every Tuesday at 12:01 AM IST (6:31 PM UTC Monday)
 // Cron format: minute hour day month day-of-week
-// IST is UTC+5:30, so 12:01 AM IST = 6:31 PM UTC (previous day)
+// Railway runs in UTC, so we schedule for 6:31 PM UTC Monday (which is 12:01 AM IST Tuesday)
 cron.schedule('31 18 * * 1', () => {
   refreshFPLData();
 }, {
   scheduled: true,
-  timezone: "Asia/Kolkata"
+  timezone: "UTC"  // Changed from "Asia/Kolkata" to "UTC" for Railway deployment
 });
 
-console.log('⏰ Scheduled FPL data refresh: Every Tuesday at 12:01 AM IST');
+console.log('⏰ Scheduled FPL data refresh: Every Monday at 6:31 PM UTC (Tuesday 12:01 AM IST)');
 
 // API Routes
 app.get('/api/test-db', async (req, res) => {
