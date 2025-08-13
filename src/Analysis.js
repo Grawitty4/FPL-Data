@@ -107,12 +107,41 @@ function Analysis({ players, teams, positions }) {
   const categoryCounts = getCategoryCounts();
   const displayPlayers = getCategoryPlayers(selectedCategory);
   
+  // Debug: Check for duplicates in displayPlayers
+  console.log('Display players count:', displayPlayers.length);
+  const displayFplIds = displayPlayers.map(p => p.fpl_id);
+  const uniqueDisplayIds = new Set(displayFplIds);
+  console.log('Unique display FPL IDs:', uniqueDisplayIds.size, 'Total display players:', displayPlayers.length);
+  
+  if (displayFplIds.length !== uniqueDisplayIds.size) {
+    console.warn('DUPLICATE PLAYERS IN DISPLAY!');
+    const duplicates = displayFplIds.filter((id, index) => displayFplIds.indexOf(id) !== index);
+    console.log('Duplicate FPL IDs in display:', [...new Set(duplicates)]);
+    
+    // Show which players are duplicated
+    const duplicatePlayers = displayPlayers.filter(player => 
+      displayFplIds.filter(id => id === player.fpl_id).length > 1
+    );
+    console.log('Duplicate players details:', duplicatePlayers.map(p => ({
+      name: p.playerName,
+      fpl_id: p.fpl_id,
+      category: p.category,
+      position_id: p.position_id
+    })));
+  }
+  
   // Get unique positions for filter
   const uniquePositions = Object.entries(positions).map(([id, name]) => ({
     id: parseInt(id),
     name: name
   }));
   
+  // Debug: Check positions object
+  console.log('Positions object:', positions);
+  console.log('Unique positions:', uniquePositions);
+  console.log('Positions object keys:', Object.keys(positions));
+  console.log('Positions object values:', Object.values(positions));
+
   // Calculate median values for quadrant lines
   const medianPrice = displayPlayers.length > 0 ? 
     displayPlayers.sort((a, b) => a.price - b.price)[Math.floor(displayPlayers.length / 2)].price : 0;
