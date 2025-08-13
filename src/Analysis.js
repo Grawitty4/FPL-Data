@@ -29,7 +29,6 @@ function Analysis({ players, teams, positions }) {
   const [filteredPlayers, setFilteredPlayers] = useState([]);
   const [clickedCoordinates, setClickedCoordinates] = useState(null);
   const [playersAtClickedPoint, setPlayersAtClickedPoint] = useState([]);
-  const [debugCounter, setDebugCounter] = useState(0);
 
   // Classify players based on starts
   const classifyPlayers = (players) => {
@@ -59,33 +58,10 @@ function Analysis({ players, teams, positions }) {
 
   useEffect(() => {
     if (players && players.length > 0) {
-      console.log('Analysis component received players:', players.length);
-      console.log('Sample players:', players.slice(0, 3));
-      
-      // Check for duplicates
-      const fplIds = players.map(p => p.fpl_id);
-      const uniqueIds = new Set(fplIds);
-      console.log('Unique FPL IDs:', uniqueIds.size, 'Total players:', players.length);
-      
-      if (fplIds.length !== uniqueIds.size) {
-        console.warn('DUPLICATE PLAYERS DETECTED!');
-        const duplicates = fplIds.filter((id, index) => fplIds.indexOf(id) !== index);
-        console.log('Duplicate FPL IDs:', [...new Set(duplicates)]);
-      }
-      
       const classifiedPlayers = classifyPlayers(players);
       setFilteredPlayers(classifiedPlayers);
     }
   }, [players]);
-
-  // Debug: Monitor state changes
-  useEffect(() => {
-    console.log('🔄 clickedCoordinates changed:', clickedCoordinates);
-  }, [clickedCoordinates]);
-
-  useEffect(() => {
-    console.log('🔄 playersAtClickedPoint changed:', playersAtClickedPoint);
-  }, [playersAtClickedPoint]);
 
   const getCategoryPlayers = (category) => {
     let players = filteredPlayers;
@@ -120,10 +96,8 @@ function Analysis({ players, teams, positions }) {
   const displayPlayers = getCategoryPlayers(selectedCategory);
   
   // Debug: Check for duplicates in displayPlayers
-  console.log('Display players count:', displayPlayers.length);
   const displayFplIds = displayPlayers.map(p => p.fpl_id);
   const uniqueDisplayIds = new Set(displayFplIds);
-  console.log('Unique display FPL IDs:', uniqueDisplayIds.size, 'Total display players:', displayPlayers.length);
   
   if (displayFplIds.length !== uniqueDisplayIds.size) {
     console.warn('DUPLICATE PLAYERS IN DISPLAY!');
@@ -144,27 +118,16 @@ function Analysis({ players, teams, positions }) {
   
   // Function to get players at specific coordinates
   const getPlayersAtCoordinates = (x, y) => {
-    console.log('🔍 getPlayersAtCoordinates called with:', x, y);
-    console.log('🔍 displayPlayers available:', displayPlayers.length);
     const found = displayPlayers.filter(player => 
       Math.abs(player.price - x) < 0.1 && Math.abs(player.points - y) < 0.1
     );
-    console.log('🔍 Found players:', found);
     return found;
   };
 
   // Handle chart click
   const handleChartClick = (event, elements) => {
-    console.log('🎯 Chart clicked!', event, elements);
-    console.log('Event type:', event.type);
-    console.log('Elements:', elements);
-    
     if (elements && elements.length > 0) {
       const element = elements[0];
-      console.log('Element:', element);
-      console.log('Element raw:', element.raw);
-      console.log('Element index:', element.index);
-      console.log('Element datasetIndex:', element.datasetIndex);
       
       // Safely access the data point
       let dataPoint;
@@ -174,35 +137,23 @@ function Analysis({ players, teams, positions }) {
         // Fallback: get data from chart data
         dataPoint = chartData.datasets[element.datasetIndex].data[element.index];
       } else {
-        console.error('❌ Cannot determine data point from element:', element);
         return;
       }
       
-      console.log('✅ Data point clicked:', dataPoint);
-      
       if (!dataPoint || dataPoint.x === undefined || dataPoint.y === undefined) {
-        console.error('❌ Invalid data point:', dataPoint);
         return;
       }
       
       const playersAtPoint = getPlayersAtCoordinates(dataPoint.x, dataPoint.y);
-      console.log('🔍 Players at this point:', playersAtPoint);
       
-      console.log('🔄 Setting state...');
       setClickedCoordinates({ x: dataPoint.x, y: dataPoint.y });
       setPlayersAtClickedPoint(playersAtPoint);
-      
-      console.log(`📍 Clicked on point: £${dataPoint.x}m, ${dataPoint.y} pts`);
-      console.log(`👥 Found ${playersAtPoint.length} players at this point`);
-    } else {
-      console.log('❌ No elements found in click event');
-      console.log('Event details:', event);
     }
   };
 
   // Debug: Log function definition
-  console.log('🔧 handleChartClick function defined:', typeof handleChartClick);
-  console.log('🔧 handleChartClick function:', handleChartClick);
+  // console.log('🔧 handleChartClick function defined:', typeof handleChartClick);
+  // console.log('🔧 handleChartClick function:', handleChartClick);
 
   // Get unique positions for filter
   const uniquePositions = Object.entries(positions).map(([id, name]) => ({
@@ -211,10 +162,10 @@ function Analysis({ players, teams, positions }) {
   }));
   
   // Debug: Check positions object
-  console.log('Positions object:', positions);
-  console.log('Unique positions:', uniquePositions);
-  console.log('Positions object keys:', Object.keys(positions));
-  console.log('Positions object values:', Object.values(positions));
+  // console.log('Positions object:', positions);
+  // console.log('Unique positions:', uniquePositions);
+  // console.log('Positions object keys:', Object.keys(positions));
+  // console.log('Positions object values:', Object.values(positions));
 
   // Calculate median values for quadrant lines
   const medianPrice = displayPlayers.length > 0 ? 
@@ -234,16 +185,16 @@ function Analysis({ players, teams, positions }) {
           team: teams[player.team_code]?.name || player.team_code,
           position: positions[player.position_id] || 'N/A',
           category: player.category,
-          fpl_id: player.fpl_id, // Add unique identifier
-          index: index // Add index for uniqueness
+          fpl_id: player.fpl_id,
+          index: index
         })),
         backgroundColor: displayPlayers.map(player => {
           switch (player.category) {
-            case 'regular_starters': return 'rgba(34, 197, 94, 0.7)'; // Green
-            case 'benchers': return 'rgba(59, 130, 246, 0.7)'; // Blue
-            case 'backbenchers': return 'rgba(245, 158, 11, 0.7)'; // Orange
-            case 'benchwarmers': return 'rgba(239, 68, 68, 0.7)'; // Red
-            default: return 'rgba(156, 163, 175, 0.7)'; // Gray
+            case 'regular_starters': return 'rgba(34, 197, 94, 0.7)';
+            case 'benchers': return 'rgba(59, 130, 246, 0.7)';
+            case 'backbenchers': return 'rgba(245, 158, 11, 0.7)';
+            case 'benchwarmers': return 'rgba(239, 68, 68, 0.7)';
+            default: return 'rgba(156, 163, 175, 0.7)';
           }
         }),
         borderColor: displayPlayers.map(player => {
@@ -262,13 +213,6 @@ function Analysis({ players, teams, positions }) {
     ]
   };
 
-  // Debug: Log chart data
-  console.log('📊 Chart data prepared:', chartData);
-  console.log('📊 First few data points:', chartData.datasets[0].data.slice(0, 3));
-  console.log('📊 Sample data point structure:', chartData.datasets[0].data[0]);
-  console.log('📊 Data point x value:', chartData.datasets[0].data[0]?.x);
-  console.log('📊 Data point y value:', chartData.datasets[0].data[0]?.y);
-
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -278,11 +222,7 @@ function Analysis({ players, teams, positions }) {
       intersect: false
     },
     onClick: (event, elements, chart) => {
-      console.log('🎯 Chart.js onClick triggered!', event, elements, chart);
       handleChartClick(event, elements);
-    },
-    onHover: (event, elements) => {
-      console.log('🖱️ Chart hover:', event, elements);
     },
     plugins: {
       title: {
@@ -493,9 +433,6 @@ function Analysis({ players, teams, positions }) {
             data={chartData} 
             options={chartOptions} 
             onClick={handleChartClick}
-            onMouseMove={(event, elements) => {
-              console.log('🖱️ Scatter onMouseMove:', event, elements);
-            }}
           />
         </div>
       </div>
@@ -510,44 +447,6 @@ function Analysis({ players, teams, positions }) {
             </span>
           )}
         </h3>
-        
-        {/* Debug: Test button */}
-        <div className="mb-4 p-2 bg-gray-100 border rounded text-sm">
-          <button 
-            onClick={() => {
-              console.log('Test button clicked');
-              console.log('Current clickedCoordinates:', clickedCoordinates);
-              console.log('Current playersAtClickedPoint:', playersAtClickedPoint);
-              console.log('displayPlayers count:', displayPlayers.length);
-            }}
-            className="px-3 py-1 bg-gray-300 hover:bg-gray-400 rounded text-xs"
-          >
-            🐛 Debug: Check State
-          </button>
-          <button 
-            onClick={() => {
-              console.log('Force state update test');
-              setClickedCoordinates({ x: 5.5, y: 45 });
-              setPlayersAtClickedPoint(displayPlayers.slice(0, 3));
-            }}
-            className="ml-2 px-3 py-1 bg-red-300 hover:bg-red-400 rounded text-xs"
-          >
-            🔴 Force State Test
-          </button>
-          <button 
-            onClick={() => {
-              console.log('Increment counter');
-              setDebugCounter(prev => prev + 1);
-            }}
-            className="ml-2 px-3 py-1 bg-green-300 hover:bg-green-400 rounded text-xs"
-          >
-            🟢 Counter: {debugCounter}
-          </button>
-          <span className="ml-2 text-gray-600">
-            Clicked: {clickedCoordinates ? `£${clickedCoordinates.x}m, ${clickedCoordinates.y}pts` : 'None'} | 
-            Players at point: {playersAtClickedPoint.length}
-          </span>
-        </div>
         
         {clickedCoordinates && playersAtClickedPoint.length > 0 && (
           <div className="mb-4 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
